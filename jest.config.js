@@ -1,3 +1,4 @@
+/** @type {import('ts-jest').JestConfigWithTsJest} */
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
@@ -8,7 +9,6 @@ module.exports = {
     '!src/**/*.d.ts',
     '!src/**/*.test.ts',
     '!src/index.ts',
-    '!src/runtime/**', // Skip runtime tests that need mocking
   ],
   coverageThreshold: {
     global: {
@@ -21,12 +21,8 @@ module.exports = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
-  transformIgnorePatterns: [
-    'node_modules/(?!(@anthropic-ai|@octokit)/)',
-  ],
   testPathIgnorePatterns: [
     '/node_modules/',
     '/dist/',
-    'src/runtime/.*\\.test\\.ts$', // Skip runtime tests for now
   ],
 };

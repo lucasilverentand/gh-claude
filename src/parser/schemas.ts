@@ -97,8 +97,11 @@ export const agentFrontmatterSchema = z.object({
   outputs: outputSchema,
   tools: toolSchema,
   'allowed-actors': z.array(z.string()).optional(),
+  'allowed-users': z.array(z.string()).optional(),
   'allowed-teams': z.array(z.string()).optional(),
   'allowed-paths': z.array(z.string()).optional(),
+  triggerLabels: z.array(z.string()).optional(),
+  rateLimitMinutes: z.number().min(0).optional(),
 });
 
 export type AgentFrontmatter = z.infer<typeof agentFrontmatterSchema>;

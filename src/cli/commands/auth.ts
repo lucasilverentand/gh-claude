@@ -1,11 +1,7 @@
 import { execSync, spawnSync } from 'child_process';
-import Anthropic from '@anthropic-ai/sdk';
 import ora from 'ora';
 import { logger } from '../utils/logger';
 import * as readline from 'readline';
-import { writeFileSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
 
 interface AuthOptions {
   force?: boolean;
@@ -29,25 +25,10 @@ function promptForInput(question: string): Promise<string> {
 }
 
 /**
- * Checks if a token is valid by making a test API call
+ * Validates an API key format (basic check)
  */
-async function validateToken(apiKey: string): Promise<boolean> {
-  try {
-    const client = new Anthropic({ apiKey });
-    // Make a minimal API call to validate the token
-    await client.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
-      max_tokens: 1,
-      messages: [{ role: 'user', content: 'test' }],
-    });
-    return true;
-  } catch (error: any) {
-    if (error?.status === 401 || error?.message?.includes('authentication')) {
-      return false;
-    }
-    // Other errors (rate limits, etc.) still indicate the token is valid
-    return true;
-  }
+function isValidApiKeyFormat(apiKey: string): boolean {
+  return apiKey.startsWith('sk-ant-') && apiKey.length > 20;
 }
 
 /**
@@ -55,10 +36,17 @@ async function validateToken(apiKey: string): Promise<boolean> {
  */
 function isClaudeCLIInstalled(): boolean {
   try {
-    execSync('which claude', { stdio: 'pipe' });
+    // Check common installation paths and PATH
+    execSync('claude --version', { stdio: 'pipe', shell: '/bin/bash' });
     return true;
   } catch {
-    return false;
+    // Also check the default installation path
+    try {
+      execSync('test -x "$HOME/.claude/local/claude"', { stdio: 'pipe', shell: '/bin/bash' });
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 
@@ -88,7 +76,21 @@ function getTokenFromKeychain(): string | null {
 }
 
 /**
- * Runs the claude setup-token command interactively with silenced output
+ * Gets the path to the Claude CLI binary
+ */
+function getClaudePath(): string {
+  // Check if claude is in PATH
+  try {
+    execSync('which claude', { stdio: 'pipe' });
+    return 'claude';
+  } catch {
+    // Fall back to default installation path
+    return '$HOME/.claude/local/claude';
+  }
+}
+
+/**
+ * Runs the claude setup-token command interactively
  */
 async function runClaudeSetupToken(): Promise<boolean> {
   try {
@@ -96,21 +98,13 @@ async function runClaudeSetupToken(): Promise<boolean> {
     logger.info('Please follow the prompts to authenticate with your Claude subscription.');
     logger.newline();
 
-    // Create a temporary script to capture and silence output
-    const scriptPath = join(tmpdir(), `claude-setup-${Date.now()}.sh`);
-    writeFileSync(scriptPath, '#!/bin/bash\nclaude setup-token 2>&1');
-    execSync(`chmod +x "${scriptPath}"`);
+    const claudePath = getClaudePath();
 
-    // Run with piped output to silence it
-    const result = spawnSync(scriptPath, [], {
-      stdio: ['inherit', 'pipe', 'pipe'],
-      shell: true,
+    // Run interactively with full TTY access
+    const result = spawnSync(claudePath, ['setup-token'], {
+      stdio: 'inherit',
+      shell: '/bin/bash',
     });
-
-    // Clean up
-    try {
-      execSync(`rm -f "${scriptPath}"`);
-    } catch {}
 
     return result.status === 0;
   } catch (error) {
@@ -121,11 +115,11 @@ async function runClaudeSetupToken(): Promise<boolean> {
 /**
  * Sets the API key as a GitHub repository secret
  */
-function setGitHubSecret(apiKey: string): void {
+function setGitHubSecret(secretName: string, secretValue: string): void {
   try {
     // Use gh CLI to set the secret
-    execSync('gh secret set ANTHROPIC_API_KEY', {
-      input: apiKey,
+    execSync(`gh secret set ${secretName}`, {
+      input: secretValue,
       stdio: ['pipe', 'inherit', 'inherit'],
     });
   } catch (error) {
@@ -134,28 +128,47 @@ function setGitHubSecret(apiKey: string): void {
 }
 
 /**
- * Checks if the GitHub secret is already set
+ * Checks which GitHub secrets are already set
  */
-function hasGitHubSecret(): boolean {
+function getExistingSecrets(): { hasApiKey: boolean; hasAccessToken: boolean } {
   try {
     const output = execSync('gh secret list --json name', {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     const secrets = JSON.parse(output);
-    return secrets.some((s: any) => s.name === 'ANTHROPIC_API_KEY');
+    return {
+      hasApiKey: secrets.some((s: { name: string }) => s.name === 'ANTHROPIC_API_KEY'),
+      hasAccessToken: secrets.some((s: { name: string }) => s.name === 'CLAUDE_ACCESS_TOKEN'),
+    };
   } catch (error) {
-    return false;
+    return { hasApiKey: false, hasAccessToken: false };
   }
 }
 
 export async function authCommand(options: AuthOptions): Promise<void> {
-  logger.info('Setting up Claude API token for GitHub Actions...');
+  logger.info('Setting up Claude authentication for GitHub Actions...');
   logger.newline();
 
-  // Check if secret already exists
-  if (!options.force && hasGitHubSecret()) {
-    logger.warn('ANTHROPIC_API_KEY is already set as a repository secret.');
+  // Check which secrets already exist
+  const existingSecrets = getExistingSecrets();
+
+  let useSubscription = false;
+
+  // Step 1: Check if Claude CLI is available and ask about subscription
+  if (isClaudeCLIInstalled()) {
+    const answer = await promptForInput(
+      'Do you have a Claude subscription? (y/N): '
+    );
+    useSubscription = answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes';
+  }
+
+  const secretName = useSubscription ? 'CLAUDE_ACCESS_TOKEN' : 'ANTHROPIC_API_KEY';
+  const hasExistingSecret = useSubscription ? existingSecrets.hasAccessToken : existingSecrets.hasApiKey;
+
+  // Check if the relevant secret already exists
+  if (!options.force && hasExistingSecret) {
+    logger.warn(`${secretName} is already set as a repository secret.`);
     const answer = await promptForInput('Do you want to overwrite it? (y/N): ');
     if (answer.toLowerCase() !== 'y' && answer.toLowerCase() !== 'yes') {
       logger.info('Setup cancelled.');
@@ -164,16 +177,7 @@ export async function authCommand(options: AuthOptions): Promise<void> {
     logger.newline();
   }
 
-  let apiKey: string | null = null;
-  let useSubscription = false;
-
-  // Step 1: Check if Claude CLI is available
-  if (isClaudeCLIInstalled()) {
-    const answer = await promptForInput(
-      'Do you have a Claude subscription? (y/N): '
-    );
-    useSubscription = answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes';
-  }
+  let token: string | null = null;
 
   if (useSubscription) {
     // Step 2: Run claude setup-token first (authenticates Claude CLI)
@@ -189,9 +193,9 @@ export async function authCommand(options: AuthOptions): Promise<void> {
     // Step 3: Extract token from keychain
     logger.newline();
     const spinner = ora('Extracting token from keychain...').start();
-    apiKey = getTokenFromKeychain();
+    token = getTokenFromKeychain();
 
-    if (!apiKey) {
+    if (!token) {
       spinner.fail('Failed to extract token from keychain');
       logger.error('Could not find Claude token in keychain after setup.');
       logger.error('Please try running: claude setup-token');
@@ -199,19 +203,6 @@ export async function authCommand(options: AuthOptions): Promise<void> {
     }
 
     spinner.succeed('Successfully extracted token from keychain');
-
-    // Step 4: Validate the token
-    const validationSpinner = ora('Validating token...').start();
-    const isValid = await validateToken(apiKey);
-
-    if (isValid) {
-      validationSpinner.succeed('Token is valid');
-    } else {
-      validationSpinner.warn('Token validation returned 401 - this is expected for OAuth tokens');
-      logger.warn('The extracted token is an OAuth token (for Claude CLI).');
-      logger.warn('GitHub Actions may require a separate API key.');
-      logger.newline();
-    }
   } else {
     // Step 2: Fall back to API token input for non-subscription users
     logger.newline();
@@ -225,26 +216,21 @@ export async function authCommand(options: AuthOptions): Promise<void> {
       process.exit(1);
     }
 
-    const validationSpinner = ora('Validating API key...').start();
-    const isValid = await validateToken(inputKey);
-
-    if (!isValid) {
-      validationSpinner.fail('Invalid API key');
-      logger.error('The provided API key is not valid. Please check and try again.');
+    if (!isValidApiKeyFormat(inputKey)) {
+      logger.error('Invalid API key format. Key should start with "sk-ant-"');
       process.exit(1);
     }
 
-    validationSpinner.succeed('API key is valid');
-    apiKey = inputKey;
+    token = inputKey;
   }
 
-  // Step 5: Set the GitHub secret
+  // Step 4: Set the GitHub secret
   logger.newline();
-  const secretSpinner = ora('Setting GitHub repository secret...').start();
+  const secretSpinner = ora(`Setting GitHub repository secret ${secretName}...`).start();
 
   try {
-    setGitHubSecret(apiKey);
-    secretSpinner.succeed('GitHub secret ANTHROPIC_API_KEY set successfully');
+    setGitHubSecret(secretName, token);
+    secretSpinner.succeed(`GitHub secret ${secretName} set successfully`);
   } catch (error) {
     secretSpinner.fail('Failed to set GitHub secret');
     logger.error((error as Error).message);
@@ -252,7 +238,9 @@ export async function authCommand(options: AuthOptions): Promise<void> {
   }
 
   logger.newline();
-  logger.success('Claude API token setup complete!');
+  logger.success('Claude authentication setup complete!');
+  logger.newline();
+  logger.info('Your workflows will use ' + (useSubscription ? 'your Claude subscription' : 'API access') + '.');
   logger.newline();
   logger.info('Next steps:');
   logger.log('  1. Create agent files in .github/claude-agents/');

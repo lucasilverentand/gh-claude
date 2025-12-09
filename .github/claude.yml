@@ -14,9 +14,6 @@ repository:
   # Directory for generated workflows
   workflows_dir: .github/workflows
 
-  # Directory for runtime scripts
-  scripts_dir: .github/scripts
-
 # Security settings
 security:
   # Require all agents to have explicit outputs

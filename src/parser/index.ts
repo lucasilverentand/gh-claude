@@ -93,8 +93,11 @@ export class AgentParser {
       outputs: frontmatter.outputs,
       tools: frontmatter.tools,
       allowedActors: frontmatter['allowed-actors'],
+      allowedUsers: frontmatter['allowed-users'],
       allowedTeams: frontmatter['allowed-teams'],
       allowedPaths: frontmatter['allowed-paths'],
+      triggerLabels: frontmatter.triggerLabels,
+      rateLimitMinutes: frontmatter.rateLimitMinutes,
       markdown: parsed.content.trim(),
     };
 
