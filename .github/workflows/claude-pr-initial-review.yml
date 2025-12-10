@@ -1,0 +1,212 @@
+name: PR Initial Review
+'on':
+  pull_request:
+    types:
+      - opened
+      - synchronize
+permissions: {}
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      should-run: ${{ steps.set-output.outputs.should-run }}
+    steps:
+      - name: Check secrets
+        id: check-secrets
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_ACCESS_TOKEN: ${{ secrets.CLAUDE_ACCESS_TOKEN }}
+        run: |-
+          if [ -z "${ANTHROPIC_API_KEY}" ] && [ -z "${CLAUDE_ACCESS_TOKEN}" ]; then
+            echo "::error::No Claude authentication found. Please set either ANTHROPIC_API_KEY (for API access) or CLAUDE_ACCESS_TOKEN (for subscription) in your repository secrets."
+            echo "validation-failed=true" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          if [ -n "${ANTHROPIC_API_KEY}" ]; then
+            echo "✓ ANTHROPIC_API_KEY is configured (API access)"
+          fi
+          if [ -n "${CLAUDE_ACCESS_TOKEN}" ]; then
+            echo "✓ CLAUDE_ACCESS_TOKEN is configured (subscription access)"
+          fi
+      - name: Check user authorization
+        id: check-user
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |-
+          ACTOR="${{ github.actor }}"
+
+          # Get user's association with the repository
+          USER_ASSOCIATION=$(gh api "repos/${{ github.repository }}/collaborators/${ACTOR}/permission" --jq '.permission' 2>/dev/null || echo "none")
+
+          # Check if user is org member (for org repos)
+          IS_ORG_MEMBER="false"
+          ORG_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f1)
+          if gh api "orgs/${ORG_NAME}/members/${ACTOR}" >/dev/null 2>&1; then
+            IS_ORG_MEMBER="true"
+          fi
+
+          # Allowed if: admin, write access, org member, or in explicit allow list
+          ALLOWED_USERS=""
+          IS_ALLOWED="false"
+
+          if [ "${USER_ASSOCIATION}" = "admin" ] || [ "${USER_ASSOCIATION}" = "write" ]; then
+            IS_ALLOWED="true"
+            echo "✓ User has ${USER_ASSOCIATION} permission"
+          elif [ "${IS_ORG_MEMBER}" = "true" ]; then
+            IS_ALLOWED="true"
+            echo "✓ User is organization member"
+          elif [ -n "${ALLOWED_USERS}" ]; then
+            for allowed in ${ALLOWED_USERS}; do
+              if [ "${ACTOR}" = "${allowed}" ]; then
+                IS_ALLOWED="true"
+                echo "✓ User is in allowed users list"
+                break
+              fi
+            done
+          fi
+
+          if [ "${IS_ALLOWED}" = "false" ]; then
+            echo "::warning::User @${ACTOR} is not authorized to trigger this agent"
+            echo "validation-failed=true" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+      - name: Check rate limit
+        id: check-rate-limit
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |-
+          RATE_LIMIT_MINUTES=5
+
+          # Get recent workflow runs for this workflow
+          RECENT_RUNS=$(gh api "repos/${{ github.repository }}/actions/workflows/${{ github.workflow }}/runs" \
+            --jq "[.workflow_runs[] | select(.status == \"completed\" and .conclusion == \"success\")] | .[0:5] | .[].created_at" 2>/dev/null || echo "")
+
+          if [ -n "${RECENT_RUNS}" ]; then
+            CURRENT_TIME=$(date +%s)
+
+            for run_time in ${RECENT_RUNS}; do
+              RUN_TIMESTAMP=$(date -d "${run_time}" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%SZ" "${run_time}" +%s 2>/dev/null || echo "0")
+              TIME_DIFF=$(( (CURRENT_TIME - RUN_TIMESTAMP) / 60 ))
+
+              if [ "${TIME_DIFF}" -lt "${RATE_LIMIT_MINUTES}" ]; then
+                echo "::warning::Rate limit: Agent ran ${TIME_DIFF} minutes ago. Minimum interval is ${RATE_LIMIT_MINUTES} minutes."
+                echo "validation-failed=true" >> $GITHUB_OUTPUT
+                exit 1
+              fi
+            done
+          fi
+          echo "✓ Rate limit check passed"
+      - name: Set output
+        id: set-output
+        run: |-
+          echo "should-run=true" >> $GITHUB_OUTPUT
+          echo "✓ All validation checks passed"
+  claude-agent:
+    runs-on: ubuntu-latest
+    needs: validate
+    if: needs.validate.outputs.should-run == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Build GitHub context
+        id: build-context
+        run: |-
+          CONTEXT="GitHub Event: ${{ github.event_name }}\nRepository: ${{ github.repository }}\n"
+          echo "context<<EOF" >> $GITHUB_OUTPUT
+          echo "${CONTEXT}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      - name: Add issue context
+        if: github.event.issue.number
+        run: |-
+          ISSUE_CONTEXT="Issue #${{ github.event.issue.number }}: ${{ github.event.issue.title }}\nAuthor: @${{ github.event.issue.user.login }}\nBody:\n${{ github.event.issue.body }}\n"
+          echo "issue-context<<EOF" >> $GITHUB_OUTPUT
+          echo "${ISSUE_CONTEXT}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        id: issue-context
+      - name: Add PR context
+        if: github.event.pull_request.number
+        run: |-
+          PR_CONTEXT="PR #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}\nAuthor: @${{ github.event.pull_request.user.login }}\nBody:\n${{ github.event.pull_request.body }}\n"
+          echo "pr-context<<EOF" >> $GITHUB_OUTPUT
+          echo "${PR_CONTEXT}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        id: pr-context
+      - name: Run Claude Agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_ACCESS_TOKEN: ${{ secrets.CLAUDE_ACCESS_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |-
+          FULL_CONTEXT="${{ steps.build-context.outputs.context }}"
+
+          if [ -n "${{ steps.issue-context.outputs.issue-context }}" ]; then
+            FULL_CONTEXT="${FULL_CONTEXT}${{ steps.issue-context.outputs.issue-context }}"
+          fi
+
+          if [ -n "${{ steps.pr-context.outputs.pr-context }}" ]; then
+            FULL_CONTEXT="${FULL_CONTEXT}${{ steps.pr-context.outputs.pr-context }}"
+          fi
+
+          bunx --bun @anthropic-ai/claude-code -p "${FULL_CONTEXT}\n\n---\n\n# Pull Request Review Agent
+
+          You are a helpful code review assistant.
+
+          ## Your Task
+
+          When a pull request is opened or updated:
+
+          1. **Analyze Changes**: Review the diff and understand what's being changed
+
+          2. **Check for Issues**:
+             - Missing tests for new functionality
+             - Potentially breaking changes
+             - Code style inconsistencies
+             - Security concerns
+             - Documentation updates needed
+
+          3. **Provide Feedback**: Add a comment with:
+             - A brief summary of the changes
+             - Any concerns or suggestions
+             - Praise for good practices
+             - Request for tests if needed
+
+          4. **Add Labels**:
+             - \`needs-tests\` if tests are missing
+             - \`breaking-change\` if it's a breaking change
+             - \`needs-docs\` if documentation is missing
+             - \`ready-for-review\` if it looks good
+
+          ## Guidelines
+
+          - Be constructive and encouraging
+          - Focus on significant issues, not nitpicks
+          - Explain *why* something might be a concern
+          - Remember: you're here to help, not to block progress
+          - Acknowledge what's done well
+
+          ## Output Format
+
+          For adding a comment:
+          \`\`\`
+          ADD_COMMENT:
+          \`\`\`json
+          {
+            "body": "Your review comment here"
+          }
+          \`\`\`
+          \`\`\`
+
+          For adding labels:
+          \`\`\`
+          ADD_LABEL:
+          \`\`\`json
+          {
+            "labels": ["label1", "label2"]
+          }
+          \`\`\`
+          \`\`\`" --allowedTools "Bash(git*),Bash(gh*),Read,Glob,Grep"

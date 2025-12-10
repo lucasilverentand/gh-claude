@@ -41,6 +41,3 @@ yarn-error.log*
 *.tmp
 .cache/
 .temp/
-
-# Generated workflows (in test repositories)
-.github/workflows/claude-*.yml
