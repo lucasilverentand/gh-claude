@@ -59,7 +59,7 @@ jobs:
         run: cd docs && bun install --frozen-lockfile
 
       - name: Configure GitHub Pages
-        uses: actions/configure-pages@v4
+        uses: actions/configure-pages@v5
 
       - name: Build documentation
         run: bun run docs:build
