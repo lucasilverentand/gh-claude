@@ -5,13 +5,12 @@ on:
     - cron: '0 9 * * 1-5'  # 9 AM weekdays
   workflow_dispatch: {}
 permissions:
-  issues: write
+  discussions: write
   pull_requests: read
-  discussions: read
+  issues: read
   contents: read
 outputs:
-  add-comment: true
-  create-issue: true
+  create-discussion: true
 inputs:
   issues:
     states:
@@ -73,7 +72,7 @@ Analyze the collected repository data and create a comprehensive daily activity 
 
 ## Output Format
 
-Create a well-formatted daily report issue with:
+Create a well-formatted daily report discussion with:
 - Clear title: "Daily Report - YYYY-MM-DD"
 - Executive summary at the top
 - Detailed sections for each activity type
@@ -82,4 +81,4 @@ Create a well-formatted daily report issue with:
 
 **Important**: Only include this in your output if there's meaningful activity to report. If it's a quiet day with minimal changes, keep the report concise.
 
-Use the `create-issue` output to post your report as a new issue with the label "daily-report".
+Use the `create-discussion` output to post your report as a new discussion in the "Announcements" category.

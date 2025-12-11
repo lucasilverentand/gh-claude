@@ -62,6 +62,7 @@ export type Output =
   | 'add-label'
   | 'remove-label'
   | 'create-issue'
+  | 'create-discussion'
   | 'create-pr'
   | 'update-file'
   | 'close-issue'

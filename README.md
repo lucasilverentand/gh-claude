@@ -184,6 +184,9 @@ Available outputs:
 - **add-label**: Add labels to issues or PRs
 - **remove-label**: Remove labels from issues or PRs
 - **create-issue**: Create new issues
+  - `max`: Maximum issues to create (default: unlimited)
+- **create-discussion**: Create new discussions
+  - `max`: Maximum discussions to create (default: unlimited)
 - **create-pr**: Create pull requests
   - `sign`: Whether to sign commits (default: false)
 - **update-file**: Modify files (requires `allowed-paths`)

@@ -5,9 +5,9 @@ name: Daily Activity Report
   workflow_dispatch: {}
 permissions:
   contents: read
-  issues: write
+  issues: read
   pull-requests: read
-  discussions: read
+  discussions: write
 jobs:
   pre-flight:
     runs-on: ubuntu-latest
@@ -481,82 +481,52 @@ jobs:
 
           This file documents how to create outputs for this agent.
 
-          ## Skill: Add Comment
+          ## Skill: Create Discussion
 
-          Add a comment to the current issue or pull request.
+          Create a new discussion in the repository.
 
-          **File to create**: \`/tmp/outputs/add-comment.json\`
+          **File to create**: \`/tmp/outputs/create-discussion.json\`
 
-          For multiple comments, use numbered suffixes: \`add-comment-1.json\`, \`add-comment-2.json\`, etc.
-
-          **JSON Schema**:
-          \`\`\`json
-          {
-            "body": "string"
-          }
-          \`\`\`
-
-          **Fields**:
-          - \`body\` (required): Markdown-formatted comment text
-
-          **Constraints**:
-          - Maximum comments: unlimited
-          - Body must be non-empty
-
-          **Example**:
-          Create \`/tmp/outputs/add-comment.json\` with:
-          \`\`\`json
-          {
-            "body": "Thank you for reporting this issue! I've analyzed it and added appropriate labels."
-          }
-          \`\`\`
-
-          Or for multiple comments:
-          - \`/tmp/outputs/add-comment-1.json\`
-          - \`/tmp/outputs/add-comment-2.json\`
-
-          **Important**: Use the Write tool to create this file. Only create the file when you're ready to post the comment.
-
-          ## Skill: Create Issue
-
-          Create a new issue in the repository.
-
-          **File to create**: \`/tmp/outputs/create-issue.json\`
-
-          For multiple issues, use numbered suffixes: \`create-issue-1.json\`, \`create-issue-2.json\`, etc.
+          For multiple discussions, use numbered suffixes: \`create-discussion-1.json\`, \`create-discussion-2.json\`, etc.
 
           **JSON Schema**:
           \`\`\`json
           {
             "title": "string",
             "body": "string",
-            "labels": ["string"] (optional),
-            "assignees": ["string"] (optional)
+            "category": "string"
           }
           \`\`\`
 
           **Fields**:
-          - \`title\` (required): Clear, descriptive issue title
-          - \`body\` (required): Detailed description with context
-          - \`labels\` (optional): Array of label names (must exist in repository)
-          - \`assignees\` (optional): Array of GitHub usernames to assign
+          - \`title\` (required): Clear, descriptive discussion title
+          - \`body\` (required): Detailed content with context
+          - \`category\` (required): Discussion category name (e.g., "Announcements", "General", "Q&A")
 
           **Constraints**:
-          - Maximum issues: unlimited
+          - Maximum discussions: unlimited
           - Title must be non-empty
           - Body should provide sufficient context
+          - Category must exist in the repository
+
+          **Common Categories**:
+          - "Announcements" - For project announcements and updates
+          - "General" - General discussions
+          - "Ideas" - Feature ideas and suggestions
+          - "Q&A" - Questions and answers
+          - "Show and tell" - Share your work
 
           **Example**:
-          Create \`/tmp/outputs/create-issue.json\` with:
+          Create \`/tmp/outputs/create-discussion.json\` with:
           \`\`\`json
           {
-            "title": "Add support for custom configurations",
-            "body": "## Description\n\nThis issue tracks the work to add custom configuration support...\n\n## Acceptance Criteria\n\n- [ ] Configuration file parsing\n- [ ] Validation logic\n- [ ] Documentation",
-            "labels": ["enhancement", "good first issue"]
+            "title": "Weekly Activity Report - 2025-01-15",
+            "body": "## Summary\n\nHere's what happened this week...\n\n## Highlights\n\n- Feature X shipped\n- 10 issues closed",
+            "category": "Announcements"
           }
           \`\`\`
 
-          **Important**: Use the Write tool to create this file. Only create issues when necessary.
+          **Important**: Use the Write tool to create this file. Only create discussions when necessary.
 
           SKILLS_EOF
       - name: Add agent instructions
@@ -592,7 +562,7 @@ jobs:
 
           ## Output Format
 
-          Create a well-formatted daily report issue with:
+          Create a well-formatted daily report discussion with:
           - Clear title: "Daily Report - YYYY-MM-DD"
           - Executive summary at the top
           - Detailed sections for each activity type
@@ -601,7 +571,7 @@ jobs:
 
           **Important**: Only include this in your output if there's meaningful activity to report. If it's a quiet day with minimal changes, keep the report concise.
 
-          Use the \`create-issue\` output to post your report as a new issue with the label "daily-report".
+          Use the \`create-discussion\` output to post your report as a new discussion in the "Announcements" category.
           INSTRUCTIONS_EOF
       - name: Run Claude Agent
         env:
@@ -624,8 +594,7 @@ jobs:
     strategy:
       matrix:
         output-type:
-          - add-comment
-          - create-issue
+          - create-discussion
       fail-fast: false
     steps:
       - name: Checkout repository
@@ -643,166 +612,140 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
 
-          if [ "${{ matrix.output-type }}" = "add-comment" ]; then
+          if [ "${{ matrix.output-type }}" = "create-discussion" ]; then
 
-          # Validate and execute add-comment output(s)
-          COMMENT_FILES=$(find /tmp/outputs -name "add-comment*.json" 2>/dev/null || true)
+          # Validate and execute create-discussion output(s)
+          DISCUSSION_FILES=$(find /tmp/outputs -name "create-discussion*.json" 2>/dev/null || true)
 
-          if [ -n "$COMMENT_FILES" ]; then
+          if [ -n "$DISCUSSION_FILES" ]; then
             # Count files
-            FILE_COUNT=$(echo "$COMMENT_FILES" | wc -l)
-            echo "Found $FILE_COUNT add-comment output file(s)"
+            FILE_COUNT=$(echo "$DISCUSSION_FILES" | wc -l)
+            echo "Found $FILE_COUNT create-discussion output file(s)"
 
             # Check max constraint
             
 
-            # Phase 1: Validate all files
-            VALIDATION_FAILED=false
-            for comment_file in $COMMENT_FILES; do
-              echo "Validating $comment_file..."
+            # Phase 1: Fetch repository discussion categories (needed for validation)
+            echo "Fetching discussion categories..."
+            REPO_OWNER=$(echo "${{ github.repository }}" | cut -d'/' -f1)
+            REPO_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2)
 
-              # Validate JSON structure
-              if ! jq empty "$comment_file" 2>/dev/null; then
-                echo "- **add-comment**: Invalid JSON format in $comment_file" >> /tmp/validation-errors/add-comment.txt
-                VALIDATION_FAILED=true
-                continue
-              fi
-
-              # Extract body
-              COMMENT_BODY=$(jq -r '.body' "$comment_file")
-
-              # Validate body is non-empty
-              if [ -z "$COMMENT_BODY" ] || [ "$COMMENT_BODY" = "null" ]; then
-                echo "- **add-comment**: Comment body is empty or missing in $comment_file" >> /tmp/validation-errors/add-comment.txt
-                VALIDATION_FAILED=true
-                continue
-              elif [ ${#COMMENT_BODY} -gt 65536 ]; then
-                echo "- **add-comment**: Comment body exceeds 65536 characters in $comment_file" >> /tmp/validation-errors/add-comment.txt
-                VALIDATION_FAILED=true
-                continue
-              fi
-
-              echo "✓ Validation passed for $comment_file"
-            done
-
-            # Check if we have an issue/PR number
-            ISSUE_NUMBER="${{ github.event.issue.number }}"
-            if [ -z "$ISSUE_NUMBER" ]; then
-              echo "- **add-comment**: No issue or PR number available" >> /tmp/validation-errors/add-comment.txt
-              VALIDATION_FAILED=true
-            fi
-
-            # Phase 2: Execute only if all validations passed
-            if [ "$VALIDATION_FAILED" = false ]; then
-              echo "✓ All add-comment validations passed - executing..."
-              for comment_file in $COMMENT_FILES; do
-                COMMENT_BODY=$(jq -r '.body' "$comment_file")
-
-                # Add comment via GitHub API
-                gh api "repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments" \
-                  -f body="$COMMENT_BODY" || {
-                  echo "- **add-comment**: Failed to post comment from $comment_file via GitHub API" >> /tmp/validation-errors/add-comment.txt
+            CATEGORIES_QUERY='query($owner: String!, $repo: String!) {
+              repository(owner: $owner, name: $repo) {
+                discussionCategories(first: 50) {
+                  nodes {
+                    id
+                    name
+                  }
                 }
-              done
-            else
-              echo "✗ add-comment validation failed - skipping execution (atomic operation)"
-            fi
-          fi
+              }
+            }'
 
-          fi
+            CATEGORIES_DATA=$(gh api graphql \
+              -f query="$CATEGORIES_QUERY" \
+              -f owner="$REPO_OWNER" \
+              -f repo="$REPO_NAME" \
+              --jq '.data.repository.discussionCategories.nodes' 2>/dev/null || echo '[]')
 
-
-          if [ "${{ matrix.output-type }}" = "create-issue" ]; then
-
-          # Validate and execute create-issue output(s)
-          ISSUE_FILES=$(find /tmp/outputs -name "create-issue*.json" 2>/dev/null || true)
-
-          if [ -n "$ISSUE_FILES" ]; then
-            # Count files
-            FILE_COUNT=$(echo "$ISSUE_FILES" | wc -l)
-            echo "Found $FILE_COUNT create-issue output file(s)"
-
-            # Check max constraint
-            
-
-            # Phase 1: Validate all files
+            # Phase 2: Validate all files
             VALIDATION_FAILED=false
-            EXISTING_LABELS=""
 
-            for issue_file in $ISSUE_FILES; do
-              echo "Validating $issue_file..."
+            for discussion_file in $DISCUSSION_FILES; do
+              echo "Validating $discussion_file..."
 
               # Validate JSON structure
-              if ! jq empty "$issue_file" 2>/dev/null; then
-                echo "- **create-issue**: Invalid JSON format in $issue_file" >> /tmp/validation-errors/create-issue.txt
+              if ! jq empty "$discussion_file" 2>/dev/null; then
+                echo "- **create-discussion**: Invalid JSON format in $discussion_file" >> /tmp/validation-errors/create-discussion.txt
                 VALIDATION_FAILED=true
                 continue
               fi
 
               # Extract fields
-              TITLE=$(jq -r '.title' "$issue_file")
-              BODY=$(jq -r '.body' "$issue_file")
-              LABELS=$(jq -r '.labels // [] | @json' "$issue_file")
+              TITLE=$(jq -r '.title' "$discussion_file")
+              BODY=$(jq -r '.body' "$discussion_file")
+              CATEGORY=$(jq -r '.category' "$discussion_file")
 
               # Validate required fields
               if [ -z "$TITLE" ] || [ "$TITLE" = "null" ]; then
-                echo "- **create-issue**: title is required in $issue_file" >> /tmp/validation-errors/create-issue.txt
+                echo "- **create-discussion**: title is required in $discussion_file" >> /tmp/validation-errors/create-discussion.txt
                 VALIDATION_FAILED=true
                 continue
               elif [ -z "$BODY" ] || [ "$BODY" = "null" ]; then
-                echo "- **create-issue**: body is required in $issue_file" >> /tmp/validation-errors/create-issue.txt
+                echo "- **create-discussion**: body is required in $discussion_file" >> /tmp/validation-errors/create-discussion.txt
+                VALIDATION_FAILED=true
+                continue
+              elif [ -z "$CATEGORY" ] || [ "$CATEGORY" = "null" ]; then
+                echo "- **create-discussion**: category is required in $discussion_file" >> /tmp/validation-errors/create-discussion.txt
                 VALIDATION_FAILED=true
                 continue
               elif [ ${#TITLE} -gt 256 ]; then
-                echo "- **create-issue**: title exceeds 256 characters in $issue_file" >> /tmp/validation-errors/create-issue.txt
+                echo "- **create-discussion**: title exceeds 256 characters in $discussion_file" >> /tmp/validation-errors/create-discussion.txt
                 VALIDATION_FAILED=true
                 continue
               fi
 
-              # Validate labels if provided
-              if [ "$LABELS" != "[]" ]; then
-                # Fetch existing labels only once
-                if [ -z "$EXISTING_LABELS" ]; then
-                  EXISTING_LABELS=$(gh api "repos/${{ github.repository }}/labels" --jq '[.[].name]' 2>/dev/null || echo '[]')
-                fi
+              # Validate category exists
+              CATEGORY_ID=$(echo "$CATEGORIES_DATA" | jq -r --arg cat "$CATEGORY" '.[] | select(.name == $cat) | .id')
 
-                for label in $(echo "$LABELS" | jq -r '.[]'); do
-                  if ! echo "$EXISTING_LABELS" | jq -e --arg label "$label" 'index($label)' >/dev/null 2>&1; then
-                    echo "- **create-issue**: Label '$label' does not exist in repository (in $issue_file)" >> /tmp/validation-errors/create-issue.txt
-                    VALIDATION_FAILED=true
-                  fi
-                done
+              if [ -z "$CATEGORY_ID" ] || [ "$CATEGORY_ID" = "null" ]; then
+                echo "- **create-discussion**: Category '$CATEGORY' does not exist in repository (in $discussion_file)" >> /tmp/validation-errors/create-discussion.txt
+                VALIDATION_FAILED=true
+                continue
               fi
 
-              echo "✓ Validation passed for $issue_file"
+              echo "✓ Validation passed for $discussion_file"
             done
 
-            # Phase 2: Execute only if all validations passed
+            # Phase 3: Execute only if all validations passed
             if [ "$VALIDATION_FAILED" = false ]; then
-              echo "✓ All create-issue validations passed - executing..."
+              echo "✓ All create-discussion validations passed - executing..."
 
-              for issue_file in $ISSUE_FILES; do
-                TITLE=$(jq -r '.title' "$issue_file")
-                BODY=$(jq -r '.body' "$issue_file")
-                LABELS=$(jq -r '.labels // [] | @json' "$issue_file")
-                ASSIGNEES=$(jq -r '.assignees // [] | @json' "$issue_file")
+              for discussion_file in $DISCUSSION_FILES; do
+                TITLE=$(jq -r '.title' "$discussion_file")
+                BODY=$(jq -r '.body' "$discussion_file")
+                CATEGORY=$(jq -r '.category' "$discussion_file")
 
-                # Build API payload
-                PAYLOAD=$(jq -n \
-                  --arg title "$TITLE" \
-                  --arg body "$BODY" \
-                  --argjson labels "$LABELS" \
-                  --argjson assignees "$ASSIGNEES" \
-                  '{title: $title, body: $body, labels: $labels, assignees: $assignees}')
+                # Get category ID
+                CATEGORY_ID=$(echo "$CATEGORIES_DATA" | jq -r --arg cat "$CATEGORY" '.[] | select(.name == $cat) | .id')
 
-                # Create issue via GitHub API
-                gh api "repos/${{ github.repository }}/issues" \
-                  --input - <<< "$PAYLOAD" || {
-                  echo "- **create-issue**: Failed to create issue from $issue_file via GitHub API" >> /tmp/validation-errors/create-issue.txt
-                }
+                # Get repository ID (needed for GraphQL mutation)
+                REPO_ID_QUERY='query($owner: String!, $repo: String!) {
+                  repository(owner: $owner, name: $repo) {
+                    id
+                  }
+                }'
+
+                REPO_ID=$(gh api graphql \
+                  -f query="$REPO_ID_QUERY" \
+                  -f owner="$REPO_OWNER" \
+                  -f repo="$REPO_NAME" \
+                  --jq '.data.repository.id' 2>/dev/null)
+
+                # Create discussion via GraphQL API
+                CREATE_MUTATION='mutation($repositoryId: ID!, $categoryId: ID!, $title: String!, $body: String!) {
+                  createDiscussion(input: {repositoryId: $repositoryId, categoryId: $categoryId, title: $title, body: $body}) {
+                    discussion {
+                      url
+                    }
+                  }
+                }'
+
+                RESULT=$(gh api graphql \
+                  -f query="$CREATE_MUTATION" \
+                  -f repositoryId="$REPO_ID" \
+                  -f categoryId="$CATEGORY_ID" \
+                  -f title="$TITLE" \
+                  -f body="$BODY" 2>/dev/null || echo "")
+
+                if [ -n "$RESULT" ]; then
+                  DISCUSSION_URL=$(echo "$RESULT" | jq -r '.data.createDiscussion.discussion.url')
+                  echo "✓ Created discussion: $DISCUSSION_URL"
+                else
+                  echo "- **create-discussion**: Failed to create discussion from $discussion_file via GitHub API" >> /tmp/validation-errors/create-discussion.txt
+                fi
               done
             else
-              echo "✗ create-issue validation failed - skipping execution (atomic operation)"
+              echo "✗ create-discussion validation failed - skipping execution (atomic operation)"
             fi
           fi
 

@@ -57,6 +57,7 @@ import './add-comment';
 import './add-label';
 import './remove-label';
 import './create-issue';
+import './create-discussion';
 import './create-pr';
 import './update-file';
 import './close-issue';
