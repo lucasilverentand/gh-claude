@@ -33,7 +33,7 @@ const triggerConfigSchema = z.object({
     .optional(),
   workflow_dispatch: z
     .object({
-      inputs: z.record(workflowInputSchema).optional(),
+      inputs: z.record(z.string(), workflowInputSchema).optional(),
     })
     .optional(),
   repository_dispatch: z
@@ -89,7 +89,7 @@ const toolSchema = z
     z.object({
       name: z.string(),
       description: z.string(),
-      parameters: z.record(z.unknown()).optional(),
+      parameters: z.record(z.string(), z.unknown()).optional(),
     })
   )
   .optional();
