@@ -7,17 +7,17 @@
     "gh-claude": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
-    "lint": "eslint src --ext .ts",
-    "format": "prettier --write \"src/**/*.ts\"",
-    "prepare": "npm run build",
-    "docs:dev": "cd docs && astro dev",
-    "docs:build": "cd docs && astro build",
-    "docs:preview": "cd docs && astro preview"
+    "build": "bun run tsc",
+    "dev": "bun run tsc --watch",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "test:coverage": "bun test --coverage",
+    "lint": "bun run eslint src --ext .ts",
+    "format": "bun x prettier --write \"src/**/*.ts\"",
+    "prepare": "bun run build",
+    "docs:dev": "cd docs && bun run astro dev",
+    "docs:build": "cd docs && bun run astro build",
+    "docs:preview": "cd docs && bun run astro preview"
   },
   "keywords": [
     "github",
@@ -58,6 +58,7 @@
     "typescript": "^5.4.5"
   },
   "engines": {
-    "bun": ">=1.0.0"
+    "bun": ">=1.0.0",
+    "node": ">=20.0.0"
   }
 }

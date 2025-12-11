@@ -3,6 +3,8 @@ import starlight from '@astrojs/starlight';
 import starlightThemeRapide from 'starlight-theme-rapide';
 
 export default defineConfig({
+  site: 'https://lucasilverentand.github.io',
+  base: '/gh-claude',
   integrations: [
     starlight({
       title: 'gh-claude',
