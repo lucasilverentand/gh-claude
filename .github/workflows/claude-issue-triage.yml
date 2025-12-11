@@ -173,8 +173,8 @@ jobs:
           Add a comment to the current issue or pull request.
 
           **How to use:**
-          - Use \`mcp__github__issues_addComment\` for issues
-          - Use \`mcp__github__pulls_addComment\` for pull requests
+          - Use \`mcp__github__add_issue_comment\` tool
+          - Works for both issues and pull requests
           - Provide the comment body as markdown text
           - Be constructive and professional in your comments
 
@@ -183,10 +183,10 @@ jobs:
 
           **Example:**
           \`\`\`
-          Use the mcp__github__issues_addComment tool with:
+          Use the mcp__github__add_issue_comment tool with:
           - owner: repository owner
           - repo: repository name
-          - issue_number: current issue number
+          - issue_number: current issue/PR number
           - body: "Your markdown comment here"
           \`\`\`
 
@@ -195,18 +195,19 @@ jobs:
           Add labels to the current issue or pull request.
 
           **How to use:**
-          - Use \`mcp__github__issues_addLabels\` for issues
-          - Use \`mcp__github__pulls_addLabels\` for pull requests (using issue_number parameter)
-          - Provide an array of label names
+          - Use \`mcp__github__update_issue\` tool to add labels
+          - Works for both issues and pull requests
+          - Provide an array of label names to add
           - Note: Labels must already exist in the repository
+          - This operation adds to existing labels (doesn't replace them)
 
           **Example:**
           \`\`\`
-          Use the mcp__github__issues_addLabels tool with:
+          Use the mcp__github__update_issue tool with:
           - owner: repository owner
           - repo: repository name
           - issue_number: current issue/PR number
-          - labels: ["bug", "needs-triage"]
+          - labels: ["bug", "needs-triage"]  # Labels to add
           \`\`\`
 
           OPERATIONS_EOF

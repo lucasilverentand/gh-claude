@@ -70,8 +70,8 @@ function generateAddCommentSkill(config: OutputConfig | Record<string, never>): 
 Add a comment to the current issue or pull request.
 
 **How to use:**
-- Use \`mcp__github__issues_addComment\` for issues
-- Use \`mcp__github__pulls_addComment\` for pull requests
+- Use \`mcp__github__add_issue_comment\` tool
+- Works for both issues and pull requests
 - Provide the comment body as markdown text
 - Be constructive and professional in your comments
 
@@ -80,10 +80,10 @@ Add a comment to the current issue or pull request.
 
 **Example:**
 \`\`\`
-Use the mcp__github__issues_addComment tool with:
+Use the mcp__github__add_issue_comment tool with:
 - owner: repository owner
 - repo: repository name
-- issue_number: current issue number
+- issue_number: current issue/PR number
 - body: "Your markdown comment here"
 \`\`\``;
 }
@@ -94,18 +94,19 @@ function generateAddLabelSkill(_config: OutputConfig | Record<string, never>): s
 Add labels to the current issue or pull request.
 
 **How to use:**
-- Use \`mcp__github__issues_addLabels\` for issues
-- Use \`mcp__github__pulls_addLabels\` for pull requests (using issue_number parameter)
-- Provide an array of label names
+- Use \`mcp__github__update_issue\` tool to add labels
+- Works for both issues and pull requests
+- Provide an array of label names to add
 - Note: Labels must already exist in the repository
+- This operation adds to existing labels (doesn't replace them)
 
 **Example:**
 \`\`\`
-Use the mcp__github__issues_addLabels tool with:
+Use the mcp__github__update_issue tool with:
 - owner: repository owner
 - repo: repository name
 - issue_number: current issue/PR number
-- labels: ["bug", "needs-triage"]
+- labels: ["bug", "needs-triage"]  # Labels to add
 \`\`\``;
 }
 
@@ -115,17 +116,20 @@ function generateRemoveLabelSkill(_config: OutputConfig | Record<string, never>)
 Remove labels from the current issue or pull request.
 
 **How to use:**
-- Use \`mcp__github__issues_removeLabel\` for issues
-- Use \`mcp__github__pulls_removeLabel\` for pull requests (using issue_number parameter)
-- Provide the label name to remove
+- Use \`mcp__github__update_issue\` tool to update labels
+- Works for both issues and pull requests
+- First get current labels with \`mcp__github__get_issue\`
+- Then update with labels array excluding the ones to remove
 
 **Example:**
 \`\`\`
-Use the mcp__github__issues_removeLabel tool with:
-- owner: repository owner
-- repo: repository name
-- issue_number: current issue/PR number
-- name: "needs-review"
+1. Get current issue: mcp__github__get_issue
+2. Filter out unwanted labels from the labels array
+3. Update with mcp__github__update_issue:
+   - owner: repository owner
+   - repo: repository name
+   - issue_number: current issue/PR number
+   - labels: [remaining_labels]  # Array without removed labels
 \`\`\``;
 }
 
@@ -137,7 +141,7 @@ function generateCreateIssueSkill(config: OutputConfig | Record<string, never>):
 Create a new issue in the repository.
 
 **How to use:**
-- Use \`mcp__github__issues_create\`
+- Use \`mcp__github__create_issue\` tool
 - Required fields: title and body
 - Optional: labels, assignees, milestone
 
@@ -146,7 +150,7 @@ Create a new issue in the repository.
 
 **Example:**
 \`\`\`
-Use the mcp__github__issues_create tool with:
+Use the mcp__github__create_issue tool with:
 - owner: repository owner
 - repo: repository name
 - title: "Clear, descriptive title"
@@ -172,7 +176,7 @@ Create a pull request with code changes.
 
 **How to use:**
 - Use Git commands via Bash tool to create branch, commit, and push
-- Use \`mcp__github__pulls_create\` to create the PR
+- Use \`mcp__github__create_pull_request\` tool to create the PR
 - Required: title, body, head (your branch), base (target branch)
 
 **Constraints:**
@@ -195,7 +199,7 @@ git commit -m "Description of changes"
 git push origin feature/your-change
 \`\`\`
 
-Then use \`mcp__github__pulls_create\` with:
+Then use \`mcp__github__create_pull_request\` with:
 - owner: repository owner
 - repo: repository name
 - title: "Clear PR title"
@@ -229,25 +233,36 @@ ${pathsList}
 
 Modify existing files in the repository.
 
-**Workflow:**
+**Method 1: Using GitHub MCP (Recommended)**
+- Use \`mcp__github__create_or_update_file\` tool
+- Creates file if it doesn't exist, updates if it does
+- Automatically commits and pushes
+
+**Method 2: Using Git Workflow**
 1. Use the Read tool to view current file contents
 2. Use the Edit tool to make precise changes
 3. Commit changes${signCommits ? ' with signing' : ''}
-4. Push to the appropriate branch
+4. Push using \`git push\` or \`mcp__github__push_files\`
 ${pathsSection}
 
 **Constraints:**
 ${signCommits ? '- Commits must be signed (configured)' : '- Standard commit workflow'}
 
-**Example:**
+**Example (MCP method):**
+\`\`\`
+Use mcp__github__create_or_update_file with:
+- owner: repository owner
+- repo: repository name
+- path: "path/to/file.txt"
+- content: "new file content"
+- message: "Update file.txt"
+- branch: "main" (or feature branch)
+\`\`\`
+
+**Example (Git method):**
 \`\`\`bash
-# Read the file first
-# (Use Read tool)
-
-# Make changes
-# (Use Edit tool with old_string and new_string)
-
-# Commit
+# Read and modify using Edit tool
+# Then commit and push:
 git add <modified-files>
 git commit -m "Description of changes"
 git push
@@ -260,17 +275,18 @@ function generateCloseIssueSkill(_config: OutputConfig | Record<string, never>):
 Close the current issue.
 
 **How to use:**
-- Use \`mcp__github__issues_update\`
+- Use \`mcp__github__update_issue\` tool
 - Set state to "closed"
 - Optionally provide a reason in a comment before closing
 
 **Example:**
 \`\`\`
-Use the mcp__github__issues_update tool with:
+Use the mcp__github__update_issue tool with:
 - owner: repository owner
 - repo: repository name
 - issue_number: current issue number
 - state: "closed"
+- state_reason: "completed" or "not_planned" (optional)
 \`\`\``;
 }
 
@@ -280,13 +296,14 @@ function generateClosePRSkill(_config: OutputConfig | Record<string, never>): st
 Close the current pull request.
 
 **How to use:**
-- Use \`mcp__github__pulls_update\`
+- Use \`mcp__github__update_pull_request\` tool
 - Set state to "closed"
 - Optionally provide a reason in a comment before closing
+- Note: To merge instead of just closing, use \`mcp__github__merge_pull_request\`
 
 **Example:**
 \`\`\`
-Use the mcp__github__pulls_update tool with:
+Use the mcp__github__update_pull_request tool with:
 - owner: repository owner
 - repo: repository name
 - pull_number: current PR number

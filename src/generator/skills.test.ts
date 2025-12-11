@@ -48,8 +48,7 @@ describe('generateSkillForOutput', () => {
       const result = generateSkillForOutput('add-comment', {}, []);
 
       expect(result).toContain('## Operation: Add Comment');
-      expect(result).toContain('mcp__github__issues_addComment');
-      expect(result).toContain('mcp__github__pulls_addComment');
+      expect(result).toContain('mcp__github__add_issue_comment');
       expect(result).toContain('Maximum comments: unlimited');
     });
 
@@ -65,8 +64,7 @@ describe('generateSkillForOutput', () => {
       const result = generateSkillForOutput('add-label', {}, []);
 
       expect(result).toContain('## Operation: Add Labels');
-      expect(result).toContain('mcp__github__issues_addLabels');
-      expect(result).toContain('mcp__github__pulls_addLabels');
+      expect(result).toContain('mcp__github__update_issue');
       expect(result).toContain('Labels must already exist');
     });
   });
@@ -76,8 +74,8 @@ describe('generateSkillForOutput', () => {
       const result = generateSkillForOutput('remove-label', {}, []);
 
       expect(result).toContain('## Operation: Remove Labels');
-      expect(result).toContain('mcp__github__issues_removeLabel');
-      expect(result).toContain('mcp__github__pulls_removeLabel');
+      expect(result).toContain('mcp__github__update_issue');
+      expect(result).toContain('mcp__github__get_issue');
     });
   });
 
@@ -86,7 +84,7 @@ describe('generateSkillForOutput', () => {
       const result = generateSkillForOutput('create-issue', {}, []);
 
       expect(result).toContain('## Operation: Create Issue');
-      expect(result).toContain('mcp__github__issues_create');
+      expect(result).toContain('mcp__github__create_issue');
       expect(result).toContain('Maximum issues: unlimited');
       expect(result).toContain('Required fields: title and body');
     });
@@ -103,7 +101,7 @@ describe('generateSkillForOutput', () => {
       const result = generateSkillForOutput('create-pr', {}, []);
 
       expect(result).toContain('## Operation: Create Pull Request');
-      expect(result).toContain('mcp__github__pulls_create');
+      expect(result).toContain('mcp__github__create_pull_request');
       expect(result).toContain('Create a new branch');
       expect(result).toContain('Maximum PRs: unlimited');
       expect(result).not.toContain('Commits must be signed');
@@ -175,7 +173,7 @@ describe('generateSkillForOutput', () => {
       const result = generateSkillForOutput('close-issue', {}, []);
 
       expect(result).toContain('## Operation: Close Issue');
-      expect(result).toContain('mcp__github__issues_update');
+      expect(result).toContain('mcp__github__update_issue');
       expect(result).toContain('state: "closed"');
     });
   });
@@ -185,7 +183,7 @@ describe('generateSkillForOutput', () => {
       const result = generateSkillForOutput('close-pr', {}, []);
 
       expect(result).toContain('## Operation: Close Pull Request');
-      expect(result).toContain('mcp__github__pulls_update');
+      expect(result).toContain('mcp__github__update_pull_request');
       expect(result).toContain('state: "closed"');
     });
   });
