@@ -329,6 +329,144 @@ describe('WorkflowGenerator', () => {
         expect(workflow.jobs.validate.outputs['should-run']).toContain('steps.set-output.outputs.should-run');
       });
     });
+
+    describe('outputs and skills section', () => {
+      it('should not include operations step when no outputs configured', () => {
+        const agent: AgentDefinition = {
+          name: 'Test',
+          on: { issues: { types: ['opened'] } },
+          markdown: 'Test',
+        };
+
+        const result = generator.generate(agent);
+        const workflow = yaml.load(result) as any;
+        const steps = workflow.jobs['claude-agent'].steps;
+        const operationsStep = steps.find((step: any) => step.name === 'Add available operations');
+
+        expect(operationsStep).toBeUndefined();
+      });
+
+      it('should include operations step when outputs are configured', () => {
+        const agent: AgentDefinition = {
+          name: 'Test',
+          on: { issues: { types: ['opened'] } },
+          outputs: {
+            'add-comment': true,
+          },
+          markdown: 'Test',
+        };
+
+        const result = generator.generate(agent);
+        const workflow = yaml.load(result) as any;
+        const steps = workflow.jobs['claude-agent'].steps;
+        const operationsStep = steps.find((step: any) => step.name === 'Add available operations');
+
+        expect(operationsStep).toBeDefined();
+        expect(operationsStep.run).toContain('Available Operations');
+        expect(operationsStep.run).toContain('Operation: Add Comment');
+      });
+
+      it('should include max constraint in operations documentation', () => {
+        const agent: AgentDefinition = {
+          name: 'Test',
+          on: { issues: { types: ['opened'] } },
+          outputs: {
+            'add-comment': { max: 1 },
+          },
+          markdown: 'Test',
+        };
+
+        const result = generator.generate(agent);
+        const workflow = yaml.load(result) as any;
+        const steps = workflow.jobs['claude-agent'].steps;
+        const operationsStep = steps.find((step: any) => step.name === 'Add available operations');
+
+        expect(operationsStep.run).toContain('Maximum comments: 1');
+      });
+
+      it('should include signing constraint in PR creation documentation', () => {
+        const agent: AgentDefinition = {
+          name: 'Test',
+          on: { issues: { types: ['opened'] } },
+          outputs: {
+            'create-pr': { sign: true },
+          },
+          markdown: 'Test',
+        };
+
+        const result = generator.generate(agent);
+        const workflow = yaml.load(result) as any;
+        const steps = workflow.jobs['claude-agent'].steps;
+        const operationsStep = steps.find((step: any) => step.name === 'Add available operations');
+
+        expect(operationsStep.run).toContain('Commits must be signed');
+      });
+
+      it('should include allowed-paths in update-file documentation', () => {
+        const agent: AgentDefinition = {
+          name: 'Test',
+          on: { issues: { types: ['opened'] } },
+          outputs: {
+            'update-file': { sign: true },
+          },
+          allowedPaths: ['src/**/*.ts', '*.md'],
+          markdown: 'Test',
+        };
+
+        const result = generator.generate(agent);
+        const workflow = yaml.load(result) as any;
+        const steps = workflow.jobs['claude-agent'].steps;
+        const operationsStep = steps.find((step: any) => step.name === 'Add available operations');
+
+        expect(operationsStep.run).toContain('Allowed paths');
+        expect(operationsStep.run).toContain('src/**/*.ts');
+        expect(operationsStep.run).toContain('*.md');
+      });
+
+      it('should include multiple output types in operations section', () => {
+        const agent: AgentDefinition = {
+          name: 'Test',
+          on: { issues: { types: ['opened'] } },
+          outputs: {
+            'add-comment': { max: 1 },
+            'add-label': true,
+            'create-issue': true,
+          },
+          markdown: 'Test',
+        };
+
+        const result = generator.generate(agent);
+        const workflow = yaml.load(result) as any;
+        const steps = workflow.jobs['claude-agent'].steps;
+        const operationsStep = steps.find((step: any) => step.name === 'Add available operations');
+
+        expect(operationsStep.run).toContain('Operation: Add Comment');
+        expect(operationsStep.run).toContain('Operation: Add Labels');
+        expect(operationsStep.run).toContain('Operation: Create Issue');
+      });
+
+      it('should place operations step before agent instructions', () => {
+        const agent: AgentDefinition = {
+          name: 'Test',
+          on: { issues: { types: ['opened'] } },
+          outputs: {
+            'add-comment': true,
+          },
+          markdown: 'Test',
+        };
+
+        const result = generator.generate(agent);
+        const workflow = yaml.load(result) as any;
+        const steps = workflow.jobs['claude-agent'].steps;
+
+        const operationsStepIndex = steps.findIndex((step: any) => step.name === 'Add available operations');
+        const instructionsStepIndex = steps.findIndex((step: any) => step.name === 'Add agent instructions');
+
+        expect(operationsStepIndex).toBeGreaterThan(-1);
+        expect(instructionsStepIndex).toBeGreaterThan(-1);
+        expect(operationsStepIndex).toBeLessThan(instructionsStepIndex);
+      });
+    });
   });
 
   describe('writeWorkflow', () => {

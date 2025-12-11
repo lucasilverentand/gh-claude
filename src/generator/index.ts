@@ -2,6 +2,7 @@ import { writeFile } from 'fs/promises';
 import yaml from 'js-yaml';
 import type { AgentDefinition, WorkflowStep } from '../types';
 import { agentNameToWorkflowName } from '../cli/utils/files';
+import { generateSkillsSection } from './skills';
 
 export class WorkflowGenerator {
   generate(agent: AgentDefinition): string {
@@ -342,6 +343,19 @@ echo "✓ All validation checks passed"`,
         '${{ github.event.pull_request.body }}\n' +
         'PR_EOF',
     });
+
+    // Add available operations section if outputs are configured
+    const skillsSection = generateSkillsSection(agent.outputs, agent.allowedPaths);
+    if (skillsSection) {
+      // Escape backticks and dollar signs for shell
+      const escapedSkills = skillsSection.replace(/`/g, '\\`').replace(/\$/g, '\\$');
+      steps.push({
+        name: 'Add available operations',
+        run: 'cat >> /tmp/context.txt << \'OPERATIONS_EOF\'\n' +
+          escapedSkills + '\n' +
+          'OPERATIONS_EOF',
+      });
+    }
 
     // Add instructions to context file
     steps.push({
