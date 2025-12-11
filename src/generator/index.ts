@@ -32,6 +32,12 @@ export class WorkflowGenerator {
       },
     };
 
+    // Add execute-outputs job if outputs are configured
+    if (agent.outputs && Object.keys(agent.outputs).length > 0) {
+      workflow.jobs['execute-outputs'] = this.generateExecuteOutputsJob(agent);
+      workflow.jobs['report-results'] = this.generateReportResultsJob(agent);
+    }
+
     const yamlContent = yaml.dump(workflow, {
       lineWidth: -1,
       noRefs: true,
@@ -400,15 +406,17 @@ echo "✓ All validation checks passed"`,
       run: claudeCommand,
     });
 
-    // Add validation and execution step if outputs are configured
+    // Upload outputs artifact if outputs are configured
     if (agent.outputs && Object.keys(agent.outputs).length > 0) {
       steps.push({
-        name: 'Validate and execute outputs',
+        name: 'Upload outputs artifact',
         if: 'always()',
-        env: {
-          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}',
+        uses: 'actions/upload-artifact@v4',
+        with: {
+          name: 'agent-outputs',
+          path: '/tmp/outputs/',
+          'if-no-files-found': 'ignore',
         },
-        run: this.generateValidationScript(agent),
       });
     }
 
@@ -447,60 +455,141 @@ echo "✓ All validation checks passed"`,
     return skills.join('\n');
   }
 
-  private generateValidationScript(agent: AgentDefinition): string {
-    if (!agent.outputs || Object.keys(agent.outputs).length === 0) {
-      return '';
-    }
+  private generateExecuteOutputsJob(agent: AgentDefinition): any {
+    const outputTypes = Object.keys(agent.outputs || {});
 
+    return {
+      'runs-on': 'ubuntu-latest',
+      needs: 'claude-agent',
+      if: 'always()',
+      strategy: {
+        matrix: {
+          'output-type': outputTypes,
+        },
+        'fail-fast': false,
+      },
+      steps: [
+        {
+          name: 'Checkout repository',
+          uses: 'actions/checkout@v4',
+        },
+        {
+          name: 'Download outputs artifact',
+          uses: 'actions/download-artifact@v4',
+          with: {
+            name: 'agent-outputs',
+            path: '/tmp/outputs',
+          },
+          'continue-on-error': true,
+        },
+        {
+          name: 'Create validation errors directory',
+          run: 'mkdir -p /tmp/validation-errors',
+        },
+        {
+          name: 'Validate and execute ${{ matrix.output-type }}',
+          env: {
+            GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}',
+          },
+          run: this.generateMatrixValidationScript(agent),
+        },
+        {
+          name: 'Upload validation results',
+          if: 'always()',
+          uses: 'actions/upload-artifact@v4',
+          with: {
+            name: 'validation-results-${{ matrix.output-type }}',
+            path: '/tmp/validation-errors/',
+            'if-no-files-found': 'ignore',
+          },
+        },
+      ],
+    };
+  }
+
+  private generateMatrixValidationScript(agent: AgentDefinition): string {
     const runtime = this.createRuntimeContext(agent);
     const scripts: string[] = [];
 
     // Add validation script for each output type
-    for (const [outputType, config] of Object.entries(agent.outputs)) {
+    for (const [outputType, config] of Object.entries(agent.outputs || {})) {
       try {
         const handler = getOutputHandler(outputType as Output);
         const outputConfig = typeof config === 'boolean' ? {} : config;
         const validationScript = handler.generateValidationScript(outputConfig, runtime);
-        scripts.push(validationScript);
+
+        // Wrap each validation script in a conditional that checks the matrix variable
+        scripts.push(`
+if [ "\${{ matrix.output-type }}" = "${outputType}" ]; then
+${validationScript}
+fi
+`);
       } catch {
         // Handler not found - skip
         console.warn(`Warning: No handler found for output type: ${outputType}`);
       }
     }
 
-    // Add error reporting section at the end
-    scripts.push(`
-# Report validation errors if any exist
-if [ -d "/tmp/validation-errors" ] && [ "$(ls -A /tmp/validation-errors 2>/dev/null)" ]; then
+    return scripts.join('\n');
+  }
+
+  private generateReportResultsJob(agent: AgentDefinition): any {
+    const runtime = this.createRuntimeContext(agent);
+
+    return {
+      'runs-on': 'ubuntu-latest',
+      needs: 'execute-outputs',
+      if: 'always()',
+      steps: [
+        {
+          name: 'Download all validation results',
+          uses: 'actions/download-artifact@v4',
+          with: {
+            pattern: 'validation-results-*',
+            path: '/tmp/all-validation-errors',
+            'merge-multiple': true,
+          },
+          'continue-on-error': true,
+        },
+        {
+          name: 'Report validation errors',
+          env: {
+            GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}',
+          },
+          run: `
+# Check if there are any validation errors
+if [ -d "/tmp/all-validation-errors" ] && [ "$(ls -A /tmp/all-validation-errors 2>/dev/null)" ]; then
   echo "⚠️  Some output validations failed"
 
   # Build error message
-  ERROR_MSG="## ⚠️ Agent Output Validation Errors\n\nThe following outputs failed validation:\n\n"
+  ERROR_MSG="## ⚠️ Agent Output Validation Errors\\n\\nThe following outputs failed validation:\\n\\n"
 
-  for error_file in /tmp/validation-errors/*; do
+  for error_file in /tmp/all-validation-errors/*; do
     if [ -f "$error_file" ]; then
       ERROR_CONTENT=$(cat "$error_file")
-      ERROR_MSG="\${ERROR_MSG}\${ERROR_CONTENT}\n"
+      ERROR_MSG="\${ERROR_MSG}\${ERROR_CONTENT}\\n"
     fi
   done
 
   # Post comment if we have issue/PR number
   ISSUE_OR_PR_NUMBER="${runtime.issueNumber || runtime.prNumber}"
   if [ -n "$ISSUE_OR_PR_NUMBER" ]; then
-    echo "$ERROR_MSG" | gh api "repos/${runtime.repository}/issues/$ISSUE_OR_PR_NUMBER/comments" \\
+    echo -e "$ERROR_MSG" | gh api "repos/${runtime.repository}/issues/$ISSUE_OR_PR_NUMBER/comments" \\
       -X POST \\
-      --input - \\
       -f body=@- || echo "Failed to post validation error comment"
   else
     echo "No issue or PR number available to post validation errors"
     echo -e "$ERROR_MSG"
   fi
+
+  exit 1
 else
   echo "✓ All output validations passed"
 fi
-`);
-
-    return scripts.join('\n');
+`,
+        },
+      ],
+    };
   }
 
   private generateEnvironment(_agent: AgentDefinition): Record<string, string> {

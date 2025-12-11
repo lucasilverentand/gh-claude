@@ -68,13 +68,15 @@ if [ -n "$COMMENT_FILES" ]; then
     exit 0
   fi` : ''}
 
-  # Process each file
+  # Phase 1: Validate all files
+  VALIDATION_FAILED=false
   for comment_file in $COMMENT_FILES; do
     echo "Validating $comment_file..."
 
     # Validate JSON structure
     if ! jq empty "$comment_file" 2>/dev/null; then
       echo "- **add-comment**: Invalid JSON format in $comment_file" >> /tmp/validation-errors/add-comment.txt
+      VALIDATION_FAILED=true
       continue
     fi
 
@@ -84,28 +86,39 @@ if [ -n "$COMMENT_FILES" ]; then
     # Validate body is non-empty
     if [ -z "$COMMENT_BODY" ] || [ "$COMMENT_BODY" = "null" ]; then
       echo "- **add-comment**: Comment body is empty or missing in $comment_file" >> /tmp/validation-errors/add-comment.txt
+      VALIDATION_FAILED=true
       continue
     elif [ \${#COMMENT_BODY} -gt 65536 ]; then
       echo "- **add-comment**: Comment body exceeds 65536 characters in $comment_file" >> /tmp/validation-errors/add-comment.txt
+      VALIDATION_FAILED=true
       continue
     fi
 
-    # Validation passed - execute
-    echo "✓ add-comment validation passed for $comment_file"
-
-    # Check if we have an issue/PR number
-    ISSUE_NUMBER="${issueOrPrNumber}"
-    if [ -z "$ISSUE_NUMBER" ]; then
-      echo "- **add-comment**: No issue or PR number available" >> /tmp/validation-errors/add-comment.txt
-      continue
-    fi
-
-    # Add comment via GitHub API
-    gh api "repos/${runtime.repository}/issues/$ISSUE_NUMBER/comments" \\
-      -f body="$COMMENT_BODY" || {
-      echo "- **add-comment**: Failed to post comment from $comment_file via GitHub API" >> /tmp/validation-errors/add-comment.txt
-    }
+    echo "✓ Validation passed for $comment_file"
   done
+
+  # Check if we have an issue/PR number
+  ISSUE_NUMBER="${issueOrPrNumber}"
+  if [ -z "$ISSUE_NUMBER" ]; then
+    echo "- **add-comment**: No issue or PR number available" >> /tmp/validation-errors/add-comment.txt
+    VALIDATION_FAILED=true
+  fi
+
+  # Phase 2: Execute only if all validations passed
+  if [ "$VALIDATION_FAILED" = false ]; then
+    echo "✓ All add-comment validations passed - executing..."
+    for comment_file in $COMMENT_FILES; do
+      COMMENT_BODY=$(jq -r '.body' "$comment_file")
+
+      # Add comment via GitHub API
+      gh api "repos/${runtime.repository}/issues/$ISSUE_NUMBER/comments" \\
+        -f body="$COMMENT_BODY" || {
+        echo "- **add-comment**: Failed to post comment from $comment_file via GitHub API" >> /tmp/validation-errors/add-comment.txt
+      }
+    done
+  else
+    echo "✗ add-comment validation failed - skipping execution (atomic operation)"
+  fi
 fi
 `;
   }

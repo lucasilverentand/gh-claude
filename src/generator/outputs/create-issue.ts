@@ -72,13 +72,17 @@ if [ -n "$ISSUE_FILES" ]; then
     exit 0
   fi` : ''}
 
-  # Process each file
+  # Phase 1: Validate all files
+  VALIDATION_FAILED=false
+  EXISTING_LABELS=""
+
   for issue_file in $ISSUE_FILES; do
     echo "Validating $issue_file..."
 
     # Validate JSON structure
     if ! jq empty "$issue_file" 2>/dev/null; then
       echo "- **create-issue**: Invalid JSON format in $issue_file" >> /tmp/validation-errors/create-issue.txt
+      VALIDATION_FAILED=true
       continue
     fi
 
@@ -86,54 +90,67 @@ if [ -n "$ISSUE_FILES" ]; then
     TITLE=$(jq -r '.title' "$issue_file")
     BODY=$(jq -r '.body' "$issue_file")
     LABELS=$(jq -r '.labels // [] | @json' "$issue_file")
-    ASSIGNEES=$(jq -r '.assignees // [] | @json' "$issue_file")
 
     # Validate required fields
     if [ -z "$TITLE" ] || [ "$TITLE" = "null" ]; then
       echo "- **create-issue**: title is required in $issue_file" >> /tmp/validation-errors/create-issue.txt
+      VALIDATION_FAILED=true
       continue
     elif [ -z "$BODY" ] || [ "$BODY" = "null" ]; then
       echo "- **create-issue**: body is required in $issue_file" >> /tmp/validation-errors/create-issue.txt
+      VALIDATION_FAILED=true
       continue
     elif [ \${#TITLE} -gt 256 ]; then
       echo "- **create-issue**: title exceeds 256 characters in $issue_file" >> /tmp/validation-errors/create-issue.txt
+      VALIDATION_FAILED=true
       continue
     fi
 
     # Validate labels if provided
     if [ "$LABELS" != "[]" ]; then
-      EXISTING_LABELS=$(gh api "repos/${runtime.repository}/labels" --jq '[.[].name]' 2>/dev/null || echo '[]')
-      LABEL_ERRORS=""
+      # Fetch existing labels only once
+      if [ -z "$EXISTING_LABELS" ]; then
+        EXISTING_LABELS=$(gh api "repos/${runtime.repository}/labels" --jq '[.[].name]' 2>/dev/null || echo '[]')
+      fi
+
       for label in $(echo "$LABELS" | jq -r '.[]'); do
         if ! echo "$EXISTING_LABELS" | jq -e --arg label "$label" 'index($label)' >/dev/null 2>&1; then
-          LABEL_ERRORS="$LABEL_ERRORS Label '$label' does not exist;"
+          echo "- **create-issue**: Label '$label' does not exist in repository (in $issue_file)" >> /tmp/validation-errors/create-issue.txt
+          VALIDATION_FAILED=true
         fi
       done
-
-      # If label errors exist, skip this file
-      if [ -n "$LABEL_ERRORS" ]; then
-        echo "- **create-issue**: $LABEL_ERRORS in $issue_file" >> /tmp/validation-errors/create-issue.txt
-        continue
-      fi
     fi
 
-    # Validation passed - execute
-    echo "✓ create-issue validation passed for $issue_file"
-
-    # Build API payload
-    PAYLOAD=$(jq -n \\
-      --arg title "$TITLE" \\
-      --arg body "$BODY" \\
-      --argjson labels "$LABELS" \\
-      --argjson assignees "$ASSIGNEES" \\
-      '{title: $title, body: $body, labels: $labels, assignees: $assignees}')
-
-    # Create issue via GitHub API
-    gh api "repos/${runtime.repository}/issues" \\
-      --input - <<< "$PAYLOAD" || {
-      echo "- **create-issue**: Failed to create issue from $issue_file via GitHub API" >> /tmp/validation-errors/create-issue.txt
-    }
+    echo "✓ Validation passed for $issue_file"
   done
+
+  # Phase 2: Execute only if all validations passed
+  if [ "$VALIDATION_FAILED" = false ]; then
+    echo "✓ All create-issue validations passed - executing..."
+
+    for issue_file in $ISSUE_FILES; do
+      TITLE=$(jq -r '.title' "$issue_file")
+      BODY=$(jq -r '.body' "$issue_file")
+      LABELS=$(jq -r '.labels // [] | @json' "$issue_file")
+      ASSIGNEES=$(jq -r '.assignees // [] | @json' "$issue_file")
+
+      # Build API payload
+      PAYLOAD=$(jq -n \\
+        --arg title "$TITLE" \\
+        --arg body "$BODY" \\
+        --argjson labels "$LABELS" \\
+        --argjson assignees "$ASSIGNEES" \\
+        '{title: $title, body: $body, labels: $labels, assignees: $assignees}')
+
+      # Create issue via GitHub API
+      gh api "repos/${runtime.repository}/issues" \\
+        --input - <<< "$PAYLOAD" || {
+        echo "- **create-issue**: Failed to create issue from $issue_file via GitHub API" >> /tmp/validation-errors/create-issue.txt
+      }
+    done
+  else
+    echo "✗ create-issue validation failed - skipping execution (atomic operation)"
+  fi
 fi
 `;
   }
