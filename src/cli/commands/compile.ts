@@ -33,11 +33,7 @@ export async function compileCommand(
   }
 }
 
-async function compileAll(
-  agentsDir: string,
-  workflowsDir: string,
-  dryRun: boolean
-): Promise<void> {
+async function compileAll(agentsDir: string, workflowsDir: string, dryRun: boolean): Promise<void> {
   const spinner = ora('Finding agent files...').start();
 
   const agentsDirExists = await fileExists(agentsDir);
@@ -143,7 +139,7 @@ async function compileSingle(
         inputPath: filePath,
         errors: [
           ...allErrors,
-          ...schemaErrors.map(e => ({
+          ...schemaErrors.map((e) => ({
             field: e.path,
             message: e.message,
             severity: 'error' as const,
@@ -208,9 +204,7 @@ async function compileSingle(
 function printSummary(results: CompileResult[]): void {
   const successful = results.filter((r) => r.success).length;
   const failed = results.filter((r) => !r.success).length;
-  const warnings = results.filter((r) =>
-    r.errors?.some((e) => e.severity === 'warning')
-  ).length;
+  const warnings = results.filter((r) => r.errors?.some((e) => e.severity === 'warning')).length;
 
   logger.info('Compilation Summary:');
   logger.log(`  ${chalk.green('✓')} Successful: ${successful}`);

@@ -123,7 +123,9 @@ function setGitHubSecret(secretName: string, secretValue: string): void {
       stdio: ['pipe', 'inherit', 'inherit'],
     });
   } catch (error) {
-    throw new Error('Failed to set GitHub secret. Make sure gh CLI is installed and authenticated.');
+    throw new Error(
+      'Failed to set GitHub secret. Make sure gh CLI is installed and authenticated.'
+    );
   }
 }
 
@@ -157,14 +159,14 @@ export async function authCommand(options: AuthOptions): Promise<void> {
 
   // Step 1: Check if Claude CLI is available and ask about subscription
   if (isClaudeCLIInstalled()) {
-    const answer = await promptForInput(
-      'Do you have a Claude subscription? (y/N): '
-    );
+    const answer = await promptForInput('Do you have a Claude subscription? (y/N): ');
     useSubscription = answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes';
   }
 
   const secretName = useSubscription ? 'CLAUDE_CODE_OAUTH_TOKEN' : 'ANTHROPIC_API_KEY';
-  const hasExistingSecret = useSubscription ? existingSecrets.hasAccessToken : existingSecrets.hasApiKey;
+  const hasExistingSecret = useSubscription
+    ? existingSecrets.hasAccessToken
+    : existingSecrets.hasApiKey;
 
   // Check if the relevant secret already exists
   if (!options.force && hasExistingSecret) {
@@ -240,7 +242,9 @@ export async function authCommand(options: AuthOptions): Promise<void> {
   logger.newline();
   logger.success('Claude authentication setup complete!');
   logger.newline();
-  logger.info('Your workflows will use ' + (useSubscription ? 'your Claude subscription' : 'API access') + '.');
+  logger.info(
+    'Your workflows will use ' + (useSubscription ? 'your Claude subscription' : 'API access') + '.'
+  );
   logger.newline();
   logger.info('Next steps:');
   logger.log('  1. Create agent files in .github/claude-agents/');

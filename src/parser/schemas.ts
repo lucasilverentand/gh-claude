@@ -60,25 +60,29 @@ const claudeConfigSchema = z
   })
   .optional();
 
-const outputConfigSchema = z.object({
-  max: z.number().optional(),
-  sign: z.boolean().optional(),
-}).passthrough();  // Allow additional properties
+const outputConfigSchema = z
+  .object({
+    max: z.number().optional(),
+    sign: z.boolean().optional(),
+  })
+  .passthrough(); // Allow additional properties
 
-const outputSchema = z.record(
-  z.enum([
-    'add-comment',
-    'add-label',
-    'remove-label',
-    'create-issue',
-    'create-discussion',
-    'create-pr',
-    'update-file',
-    'close-issue',
-    'close-pr',
-  ]),
-  z.union([outputConfigSchema, z.boolean()])
-).optional();
+const outputSchema = z
+  .record(
+    z.enum([
+      'add-comment',
+      'add-label',
+      'remove-label',
+      'create-issue',
+      'create-discussion',
+      'create-pr',
+      'update-file',
+      'close-issue',
+      'close-pr',
+    ]),
+    z.union([outputConfigSchema, z.boolean()])
+  )
+  .optional();
 
 const toolSchema = z
   .array(
@@ -90,69 +94,83 @@ const toolSchema = z
   )
   .optional();
 
-const issuesInputSchema = z.object({
-  states: z.array(z.enum(['open', 'closed', 'all'])).optional(),
-  labels: z.array(z.string()).optional(),
-  assignees: z.array(z.string()).optional(),
-  creators: z.array(z.string()).optional(),
-  mentions: z.array(z.string()).optional(),
-  milestones: z.array(z.string()).optional(),
-  excludeLabels: z.array(z.string()).optional(),
-  limit: z.number().min(1).max(1000).optional(),
-}).optional();
+const issuesInputSchema = z
+  .object({
+    states: z.array(z.enum(['open', 'closed', 'all'])).optional(),
+    labels: z.array(z.string()).optional(),
+    assignees: z.array(z.string()).optional(),
+    creators: z.array(z.string()).optional(),
+    mentions: z.array(z.string()).optional(),
+    milestones: z.array(z.string()).optional(),
+    excludeLabels: z.array(z.string()).optional(),
+    limit: z.number().min(1).max(1000).optional(),
+  })
+  .optional();
 
-const pullRequestsInputSchema = z.object({
-  states: z.array(z.enum(['open', 'closed', 'merged', 'all'])).optional(),
-  labels: z.array(z.string()).optional(),
-  assignees: z.array(z.string()).optional(),
-  creators: z.array(z.string()).optional(),
-  reviewers: z.array(z.string()).optional(),
-  baseBranch: z.string().optional(),
-  headBranch: z.string().optional(),
-  excludeLabels: z.array(z.string()).optional(),
-  limit: z.number().min(1).max(1000).optional(),
-}).optional();
+const pullRequestsInputSchema = z
+  .object({
+    states: z.array(z.enum(['open', 'closed', 'merged', 'all'])).optional(),
+    labels: z.array(z.string()).optional(),
+    assignees: z.array(z.string()).optional(),
+    creators: z.array(z.string()).optional(),
+    reviewers: z.array(z.string()).optional(),
+    baseBranch: z.string().optional(),
+    headBranch: z.string().optional(),
+    excludeLabels: z.array(z.string()).optional(),
+    limit: z.number().min(1).max(1000).optional(),
+  })
+  .optional();
 
-const discussionsInputSchema = z.object({
-  categories: z.array(z.string()).optional(),
-  answered: z.boolean().optional(),
-  unanswered: z.boolean().optional(),
-  labels: z.array(z.string()).optional(),
-  limit: z.number().min(1).max(1000).optional(),
-}).optional();
+const discussionsInputSchema = z
+  .object({
+    categories: z.array(z.string()).optional(),
+    answered: z.boolean().optional(),
+    unanswered: z.boolean().optional(),
+    labels: z.array(z.string()).optional(),
+    limit: z.number().min(1).max(1000).optional(),
+  })
+  .optional();
 
-const commitsInputSchema = z.object({
-  branches: z.array(z.string()).optional(),
-  authors: z.array(z.string()).optional(),
-  excludeAuthors: z.array(z.string()).optional(),
-  limit: z.number().min(1).max(1000).optional(),
-}).optional();
+const commitsInputSchema = z
+  .object({
+    branches: z.array(z.string()).optional(),
+    authors: z.array(z.string()).optional(),
+    excludeAuthors: z.array(z.string()).optional(),
+    limit: z.number().min(1).max(1000).optional(),
+  })
+  .optional();
 
-const releasesInputSchema = z.object({
-  prerelease: z.boolean().optional(),
-  draft: z.boolean().optional(),
-  limit: z.number().min(1).max(100).optional(),
-}).optional();
+const releasesInputSchema = z
+  .object({
+    prerelease: z.boolean().optional(),
+    draft: z.boolean().optional(),
+    limit: z.number().min(1).max(100).optional(),
+  })
+  .optional();
 
-const workflowRunsInputSchema = z.object({
-  workflows: z.array(z.string()).optional(),
-  status: z.array(z.enum(['success', 'failure', 'cancelled', 'skipped'])).optional(),
-  branches: z.array(z.string()).optional(),
-  limit: z.number().min(1).max(1000).optional(),
-}).optional();
+const workflowRunsInputSchema = z
+  .object({
+    workflows: z.array(z.string()).optional(),
+    status: z.array(z.enum(['success', 'failure', 'cancelled', 'skipped'])).optional(),
+    branches: z.array(z.string()).optional(),
+    limit: z.number().min(1).max(1000).optional(),
+  })
+  .optional();
 
-const inputConfigSchema = z.object({
-  issues: issuesInputSchema,
-  pullRequests: pullRequestsInputSchema,
-  discussions: discussionsInputSchema,
-  commits: commitsInputSchema,
-  releases: releasesInputSchema,
-  workflowRuns: workflowRunsInputSchema,
-  stars: z.boolean().optional(),
-  forks: z.boolean().optional(),
-  since: z.string().optional(),
-  minItems: z.number().min(0).optional(),
-}).optional();
+const inputConfigSchema = z
+  .object({
+    issues: issuesInputSchema,
+    pullRequests: pullRequestsInputSchema,
+    discussions: discussionsInputSchema,
+    commits: commitsInputSchema,
+    releases: releasesInputSchema,
+    workflowRuns: workflowRunsInputSchema,
+    stars: z.boolean().optional(),
+    forks: z.boolean().optional(),
+    since: z.string().optional(),
+    minItems: z.number().min(0).optional(),
+  })
+  .optional();
 
 export const agentFrontmatterSchema = z.object({
   name: z.string().min(1, 'Agent name is required'),

@@ -46,7 +46,7 @@ on:
 
       const errors = await workflowValidator.validateWorkflow(missingJobs);
       expect(errors.length).toBeGreaterThan(0);
-      expect(errors.some(e => e.message.includes('jobs') || e.path.includes('jobs'))).toBe(true);
+      expect(errors.some((e) => e.message.includes('jobs') || e.path.includes('jobs'))).toBe(true);
     });
 
     it('should detect invalid trigger configuration', async () => {

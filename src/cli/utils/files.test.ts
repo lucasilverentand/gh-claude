@@ -36,9 +36,7 @@ describe('files utils', () => {
     });
 
     it('should handle complex names', () => {
-      expect(agentNameToWorkflowName('My Complex Agent Name')).toBe(
-        'claude-my-complex-agent-name'
-      );
+      expect(agentNameToWorkflowName('My Complex Agent Name')).toBe('claude-my-complex-agent-name');
     });
 
     it('should remove special characters', () => {

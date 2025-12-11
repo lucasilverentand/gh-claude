@@ -66,11 +66,15 @@ if [ -n "$ISSUE_FILES" ]; then
   echo "Found $FILE_COUNT create-issue output file(s)"
 
   # Check max constraint
-  ${maxConstraint ? `
+  ${
+    maxConstraint
+      ? `
   if [ "$FILE_COUNT" -gt ${maxConstraint} ]; then
     echo "- **create-issue**: Too many issue files ($FILE_COUNT). Maximum allowed: ${maxConstraint}" > /tmp/validation-errors/create-issue.txt
     exit 0
-  fi` : ''}
+  fi`
+      : ''
+  }
 
   # Phase 1: Validate all files
   VALIDATION_FAILED=false

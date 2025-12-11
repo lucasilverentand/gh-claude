@@ -15,11 +15,14 @@ export class WorkflowGenerator {
 
     if (agent.permissions) {
       // Transform permission keys from snake_case to kebab-case for GitHub Actions
-      workflow.permissions = Object.entries(agent.permissions).reduce((acc, [key, value]) => {
-        const kebabKey = key.replace(/_/g, '-');
-        acc[kebabKey] = value;
-        return acc;
-      }, {} as Record<string, string>);
+      workflow.permissions = Object.entries(agent.permissions).reduce(
+        (acc, [key, value]) => {
+          const kebabKey = key.replace(/_/g, '-');
+          acc[kebabKey] = value;
+          return acc;
+        },
+        {} as Record<string, string>
+      );
     }
 
     const preFlightOutputs: Record<string, string> = {
@@ -102,7 +105,7 @@ export class WorkflowGenerator {
 
       // Add blank line before job keys (except the very first one after "jobs:")
       if (isJobKey) {
-        const lastNonEmptyLine = formatted.filter(l => l.trim() !== '').pop();
+        const lastNonEmptyLine = formatted.filter((l) => l.trim() !== '').pop();
         if (lastNonEmptyLine && lastNonEmptyLine !== 'jobs:') {
           formatted.push('');
         }
@@ -333,9 +336,12 @@ echo "✓ All validation checks passed"`,
     steps.push({
       name: 'Prepare context file',
       id: 'prepare',
-      run: 'cat > /tmp/context.txt << \'CONTEXT_EOF\'\n' +
-        'GitHub Event: $' + '{{ github.event_name }}\n' +
-        'Repository: $' + '{{ github.repository }}\n' +
+      run:
+        "cat > /tmp/context.txt << 'CONTEXT_EOF'\n" +
+        'GitHub Event: $' +
+        '{{ github.event_name }}\n' +
+        'Repository: $' +
+        '{{ github.repository }}\n' +
         'CONTEXT_EOF',
     });
 
@@ -343,14 +349,16 @@ echo "✓ All validation checks passed"`,
     if (agent.inputs) {
       steps.push({
         name: 'Add collected inputs to context',
-        if: 'needs.collect-inputs.outputs.has-inputs == \'true\'',
-        run: 'cat >> /tmp/context.txt << \'INPUTS_EOF\'\n' +
+        if: "needs.collect-inputs.outputs.has-inputs == 'true'",
+        run:
+          "cat >> /tmp/context.txt << 'INPUTS_EOF'\n" +
           '\n' +
           '## Collected Inputs\n' +
           '\n' +
           'The following data has been collected from the repository:\n' +
           '\n' +
-          '$' + '{{ needs.collect-inputs.outputs.inputs-data }}\n' +
+          '$' +
+          '{{ needs.collect-inputs.outputs.inputs-data }}\n' +
           'INPUTS_EOF',
       });
     }
@@ -359,7 +367,8 @@ echo "✓ All validation checks passed"`,
     steps.push({
       name: 'Add issue context',
       if: 'github.event.issue.number',
-      run: 'cat >> /tmp/context.txt << \'ISSUE_EOF\'\n' +
+      run:
+        "cat >> /tmp/context.txt << 'ISSUE_EOF'\n" +
         'Issue #${{ github.event.issue.number }}: ${{ github.event.issue.title }}\n' +
         'Author: @${{ github.event.issue.user.login }}\n' +
         'Body:\n' +
@@ -371,7 +380,8 @@ echo "✓ All validation checks passed"`,
     steps.push({
       name: 'Add PR context',
       if: 'github.event.pull_request.number',
-      run: 'cat >> /tmp/context.txt << \'PR_EOF\'\n' +
+      run:
+        "cat >> /tmp/context.txt << 'PR_EOF'\n" +
         'PR #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}\n' +
         'Author: @${{ github.event.pull_request.user.login }}\n' +
         'Body:\n' +
@@ -411,8 +421,10 @@ echo "✓ All validation checks passed"`,
 
       steps.push({
         name: 'Create Claude skills file',
-        run: 'mkdir -p /tmp/claude && cat > /tmp/claude/CLAUDE.md << \'SKILLS_EOF\'\n' +
-          escapedSkills + '\n' +
+        run:
+          "mkdir -p /tmp/claude && cat > /tmp/claude/CLAUDE.md << 'SKILLS_EOF'\n" +
+          escapedSkills +
+          '\n' +
           'SKILLS_EOF',
       });
     }
@@ -420,22 +432,26 @@ echo "✓ All validation checks passed"`,
     // Add instructions to context file
     steps.push({
       name: 'Add agent instructions',
-      run: 'cat >> /tmp/context.txt << \'INSTRUCTIONS_EOF\'\n' +
+      run:
+        "cat >> /tmp/context.txt << 'INSTRUCTIONS_EOF'\n" +
         '\n' +
         '---\n' +
         '\n' +
-        instructions + '\n' +
+        instructions +
+        '\n' +
         'INSTRUCTIONS_EOF',
     });
 
     // Run Claude with the prepared context
-    const allowedTools = agent.outputs && Object.keys(agent.outputs).length > 0
-      ? 'Write(/tmp/outputs/*),Read,Glob,Grep'
-      : 'Read,Glob,Grep';
+    const allowedTools =
+      agent.outputs && Object.keys(agent.outputs).length > 0
+        ? 'Write(/tmp/outputs/*),Read,Glob,Grep'
+        : 'Read,Glob,Grep';
 
-    const claudeCommand = agent.outputs && Object.keys(agent.outputs).length > 0
-      ? `cd /tmp/claude && bunx --bun @anthropic-ai/claude-code -p "$(cat /tmp/context.txt)" --allowedTools "${allowedTools}" --permission-mode bypassPermissions`
-      : `bunx --bun @anthropic-ai/claude-code -p "$(cat /tmp/context.txt)" --allowedTools "${allowedTools}"`;
+    const claudeCommand =
+      agent.outputs && Object.keys(agent.outputs).length > 0
+        ? `cd /tmp/claude && bunx --bun @anthropic-ai/claude-code -p "$(cat /tmp/context.txt)" --allowedTools "${allowedTools}" --permission-mode bypassPermissions`
+        : `bunx --bun @anthropic-ai/claude-code -p "$(cat /tmp/context.txt)" --allowedTools "${allowedTools}"`;
 
     steps.push({
       name: 'Run Claude Agent',
@@ -474,7 +490,12 @@ echo "✓ All validation checks passed"`,
       return '';
     }
 
-    const skills: string[] = ['# Agent Output Skills', '', 'This file documents how to create outputs for this agent.', ''];
+    const skills: string[] = [
+      '# Agent Output Skills',
+      '',
+      'This file documents how to create outputs for this agent.',
+      '',
+    ];
 
     for (const [outputType, config] of Object.entries(agent.outputs)) {
       try {

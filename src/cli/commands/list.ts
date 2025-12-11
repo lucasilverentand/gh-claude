@@ -126,9 +126,7 @@ function printTable(agents: AgentInfo[], details: boolean): void {
     const name = chalk.cyan(agent.name.padEnd(nameWidth));
     const file = agent.file.padEnd(fileWidth);
     const triggers = agent.triggers.join(', ').padEnd(20);
-    const status = agent.compiled
-      ? chalk.green('✓ compiled')
-      : chalk.yellow('○ not compiled');
+    const status = agent.compiled ? chalk.green('✓ compiled') : chalk.yellow('○ not compiled');
 
     logger.log(`${name} ${file} ${triggers} ${status}`);
 

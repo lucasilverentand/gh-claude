@@ -9,9 +9,7 @@ import { validateCommand } from './cli/commands/validate';
 import { listCommand } from './cli/commands/list';
 import { authCommand } from './cli/commands/auth';
 
-const packageJson = JSON.parse(
-  readFileSync(join(__dirname, '../package.json'), 'utf-8')
-);
+const packageJson = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf-8'));
 
 const program = new Command();
 
@@ -51,7 +49,9 @@ program
 
 program
   .command('setup-token')
-  .description('Set up Claude API token (checks subscription token first, then prompts for API key)')
+  .description(
+    'Set up Claude API token (checks subscription token first, then prompts for API key)'
+  )
   .option('--force', 'Overwrite existing token')
   .action(authCommand);
 

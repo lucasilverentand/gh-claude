@@ -74,10 +74,12 @@ class WorkflowValidator {
     try {
       workflowJson = yaml.load(workflowYaml);
     } catch (error) {
-      return [{
-        path: 'yaml',
-        message: `Invalid YAML: ${(error as Error).message}`,
-      }];
+      return [
+        {
+          path: 'yaml',
+          message: `Invalid YAML: ${(error as Error).message}`,
+        },
+      ];
     }
 
     // Fetch schema
@@ -99,7 +101,7 @@ class WorkflowValidator {
    * Format Ajv validation errors into a more readable format
    */
   private formatErrors(errors: ErrorObject[]): ValidationError[] {
-    return errors.map(error => {
+    return errors.map((error) => {
       const path = error.instancePath || '/';
       let message = error.message || 'Validation error';
 

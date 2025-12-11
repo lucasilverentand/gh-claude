@@ -68,7 +68,9 @@ export class InputCollector {
     // Check minimum items threshold
     scriptParts.push(`# Check if we have minimum items`);
     scriptParts.push(`if [ "$TOTAL_ITEMS" -lt "${minItems}" ]; then`);
-    scriptParts.push(`  echo "⚠️  Only found $TOTAL_ITEMS items (minimum: ${minItems}). Skipping agent execution."`);
+    scriptParts.push(
+      `  echo "⚠️  Only found $TOTAL_ITEMS items (minimum: ${minItems}). Skipping agent execution."`
+    );
     scriptParts.push(`  echo "has-inputs=false" >> $GITHUB_OUTPUT`);
     scriptParts.push(`  exit 0`);
     scriptParts.push(`fi`);
@@ -165,7 +167,7 @@ fi`;
 
   private generatePullRequestsScript(config: any): string {
     const limit = config.limit || 100;
-    const states = config.states?.includes('all') ? 'all' : (config.states?.join(',') || 'open');
+    const states = config.states?.includes('all') ? 'all' : config.states?.join(',') || 'open';
     const labels = config.labels?.join(',') || '';
     const excludeLabels = config.excludeLabels?.join(',') || '';
 
@@ -185,12 +187,16 @@ ${labels ? `PRS_JSON=$(echo "$PRS_JSON" | jq '[.[] | select(.labels | map(.name)
 ${excludeLabels ? `PRS_JSON=$(echo "$PRS_JSON" | jq '[.[] | select(.labels | map(.name) | contains(["${excludeLabels.split(',').join('","')}"]) | any | not)]')` : ''}
 
 # Filter merged PRs if requested
-${config.states?.includes('merged') ? `
+${
+  config.states?.includes('merged')
+    ? `
 MERGED_PRS=$(echo "$PRS_JSON" | jq '[.[] | select(.merged_at != null)]')
 if [ "${states}" = "merged" ]; then
   PRS_JSON="$MERGED_PRS"
 fi
-` : ''}
+`
+    : ''
+}
 
 PRS_COUNT=$(echo "$PRS_JSON" | jq 'length')
 TOTAL_ITEMS=$((TOTAL_ITEMS + PRS_COUNT))

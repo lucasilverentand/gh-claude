@@ -6,10 +6,10 @@ export interface AgentDefinition {
   outputs?: Record<string, OutputConfig | boolean>;
   tools?: Tool[];
   allowedActors?: string[];
-  allowedUsers?: string[];  // Alias for allowedActors (explicit user list)
+  allowedUsers?: string[]; // Alias for allowedActors (explicit user list)
   allowedTeams?: string[];
   allowedPaths?: string[];
-  triggerLabels?: string[];  // Labels that must be present to trigger the agent
+  triggerLabels?: string[]; // Labels that must be present to trigger the agent
   rateLimitMinutes?: number; // Minimum minutes between agent runs (default: 5)
   inputs?: InputConfig; // Data collection configuration
   markdown: string;
@@ -69,9 +69,9 @@ export type Output =
   | 'close-pr';
 
 export interface OutputConfig {
-  max?: number;      // Maximum times this output can be used
-  sign?: boolean;    // Whether to sign commits (for code changes)
-  [key: string]: any;  // Allow custom settings
+  max?: number; // Maximum times this output can be used
+  sign?: boolean; // Whether to sign commits (for code changes)
+  [key: string]: any; // Allow custom settings
 }
 
 export interface Tool {

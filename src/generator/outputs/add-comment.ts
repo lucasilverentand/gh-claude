@@ -62,11 +62,15 @@ if [ -n "$COMMENT_FILES" ]; then
   echo "Found $FILE_COUNT add-comment output file(s)"
 
   # Check max constraint
-  ${maxConstraint ? `
+  ${
+    maxConstraint
+      ? `
   if [ "$FILE_COUNT" -gt ${maxConstraint} ]; then
     echo "- **add-comment**: Too many comment files ($FILE_COUNT). Maximum allowed: ${maxConstraint}" > /tmp/validation-errors/add-comment.txt
     exit 0
-  fi` : ''}
+  fi`
+      : ''
+  }
 
   # Phase 1: Validate all files
   VALIDATION_FAILED=false

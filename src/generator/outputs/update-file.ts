@@ -9,7 +9,7 @@ class UpdateFileHandler implements OutputHandler {
       return null;
     }
 
-    const pathsList = runtime.allowedPaths.map(p => `- \`${p}\``).join('\\n');
+    const pathsList = runtime.allowedPaths.map((p) => `- \`${p}\``).join('\\n');
     return `
 cat >> /tmp/context.txt << 'ALLOWED_PATHS_EOF'
 
@@ -106,7 +106,7 @@ if [ -f "/tmp/outputs/update-file.json" ]; then
       echo "- **update-file**: message is required" > /tmp/validation-errors/update-file.txt
     else
       # Validate each file path against allowed patterns
-      ALLOWED_PATTERNS="${allowedPaths.map(p => `"${p}"`).join(' ')}"
+      ALLOWED_PATTERNS="${allowedPaths.map((p) => `"${p}"`).join(' ')}"
       VALIDATION_FAILED=false
 
       for file_path in $(echo "$FILES" | jq -r '.[].path'); do

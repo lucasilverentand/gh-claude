@@ -326,7 +326,9 @@ describe('WorkflowGenerator', () => {
         const result = generator.generate(agent);
         const workflow = yaml.load(result) as any;
 
-        expect(workflow.jobs['pre-flight'].outputs['should-run']).toContain('steps.set-output.outputs.should-run');
+        expect(workflow.jobs['pre-flight'].outputs['should-run']).toContain(
+          'steps.set-output.outputs.should-run'
+        );
       });
     });
 
@@ -458,8 +460,12 @@ describe('WorkflowGenerator', () => {
         const workflow = yaml.load(result) as any;
         const steps = workflow.jobs['claude-agent'].steps;
 
-        const skillsStepIndex = steps.findIndex((step: any) => step.name === 'Create Claude skills file');
-        const instructionsStepIndex = steps.findIndex((step: any) => step.name === 'Add agent instructions');
+        const skillsStepIndex = steps.findIndex(
+          (step: any) => step.name === 'Create Claude skills file'
+        );
+        const instructionsStepIndex = steps.findIndex(
+          (step: any) => step.name === 'Add agent instructions'
+        );
 
         expect(skillsStepIndex).toBeGreaterThan(-1);
         expect(instructionsStepIndex).toBeGreaterThan(-1);

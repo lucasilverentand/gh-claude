@@ -110,7 +110,7 @@ Missing name.`;
 
       expect(agent).toBeUndefined();
       expect(errors.length).toBeGreaterThan(0);
-      expect(errors.some(e => e.field.includes('name'))).toBe(true);
+      expect(errors.some((e) => e.field.includes('name'))).toBe(true);
     });
 
     it('should fail with missing trigger', () => {
@@ -139,7 +139,7 @@ on:
       const { agent, errors } = parser.parseContent(content, 'test.md');
 
       expect(agent).toBeDefined();
-      expect(errors.some(e => e.severity === 'warning')).toBe(true);
+      expect(errors.some((e) => e.severity === 'warning')).toBe(true);
     });
 
     it('should handle invalid YAML in frontmatter', () => {
@@ -194,7 +194,7 @@ Body`;
 
       const errors = parser.validateAgent(agent);
       expect(errors.length).toBeGreaterThan(0);
-      expect(errors.some(e => e.message.includes('contents'))).toBe(true);
+      expect(errors.some((e) => e.message.includes('contents'))).toBe(true);
     });
 
     it('should require contents write for update-file', () => {
@@ -209,7 +209,7 @@ Body`;
 
       const errors = parser.validateAgent(agent);
       expect(errors.length).toBeGreaterThan(0);
-      expect(errors.some(e => e.message.includes('contents'))).toBe(true);
+      expect(errors.some((e) => e.message.includes('contents'))).toBe(true);
     });
 
     it('should require at least one trigger', () => {
@@ -254,7 +254,7 @@ Body`;
 
       expect(agent).toBeDefined();
       expect(agent?.name).toBe('Simple Agent');
-      expect(errors.filter(e => e.severity === 'error')).toHaveLength(0);
+      expect(errors.filter((e) => e.severity === 'error')).toHaveLength(0);
     });
 
     it('should handle non-existent file', async () => {

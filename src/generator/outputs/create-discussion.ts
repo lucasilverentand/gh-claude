@@ -72,11 +72,15 @@ if [ -n "$DISCUSSION_FILES" ]; then
   echo "Found $FILE_COUNT create-discussion output file(s)"
 
   # Check max constraint
-  ${maxConstraint ? `
+  ${
+    maxConstraint
+      ? `
   if [ "$FILE_COUNT" -gt ${maxConstraint} ]; then
     echo "- **create-discussion**: Too many discussion files ($FILE_COUNT). Maximum allowed: ${maxConstraint}" > /tmp/validation-errors/create-discussion.txt
     exit 0
-  fi` : ''}
+  fi`
+      : ''
+  }
 
   # Phase 1: Fetch repository discussion categories (needed for validation)
   echo "Fetching discussion categories..."

@@ -216,7 +216,7 @@ function generateUpdateFileSkill(
 
   let pathsSection = '';
   if (allowedPaths && allowedPaths.length > 0) {
-    const pathsList = allowedPaths.map(p => `  - \`${p}\``).join('\n');
+    const pathsList = allowedPaths.map((p) => `  - \`${p}\``).join('\n');
     pathsSection = `
 **Allowed paths (glob patterns):**
 ${pathsList}

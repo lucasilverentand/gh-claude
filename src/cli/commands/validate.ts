@@ -143,9 +143,7 @@ async function validateSingle(
 function printSummary(results: ValidationResult[], strict: boolean): void {
   const successful = results.filter((r) => r.success).length;
   const failed = results.filter((r) => !r.success).length;
-  const withWarnings = results.filter((r) =>
-    r.errors.some((e) => e.severity === 'warning')
-  ).length;
+  const withWarnings = results.filter((r) => r.errors.some((e) => e.severity === 'warning')).length;
 
   logger.info('Validation Summary:');
   logger.log(`  ${chalk.green('✓')} Valid: ${successful}`);
