@@ -81,4 +81,4 @@ Create a well-formatted daily report discussion with:
 
 **Important**: Only include this in your output if there's meaningful activity to report. If it's a quiet day with minimal changes, keep the report concise.
 
-Use the `create-discussion` output to post your report as a new discussion in the "Announcements" category.
+Use the `create-discussion` output to post your report as a new discussion in the "Daily Update" category.
