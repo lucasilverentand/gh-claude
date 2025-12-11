@@ -175,6 +175,8 @@ jobs:
 
           **File to create**: \`/tmp/outputs/add-comment.json\`
 
+          For multiple comments, use numbered suffixes: \`add-comment-1.json\`, \`add-comment-2.json\`, etc.
+
           **JSON Schema**:
           \`\`\`json
           {
@@ -197,6 +199,10 @@ jobs:
           }
           \`\`\`
 
+          Or for multiple comments:
+          - \`/tmp/outputs/add-comment-1.json\`
+          - \`/tmp/outputs/add-comment-2.json\`
+
           **Important**: Use the Write tool to create this file. Only create the file when you're ready to post the comment.
 
           ## Skill: Add Labels
@@ -206,6 +212,8 @@ jobs:
           **Available labels**: See the "Available Repository Labels" section in the context above for the complete list of labels you can use.
 
           **File to create**: \`/tmp/outputs/add-label.json\`
+
+          For multiple label operations, use numbered suffixes: \`add-label-1.json\`, \`add-label-2.json\`, etc.
 
           **JSON Schema**:
           \`\`\`json
@@ -310,99 +318,137 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
 
-          # Validate and execute add-comment output
-          if [ -f "/tmp/outputs/add-comment.json" ]; then
-            echo "Validating add-comment output..."
+          # Validate and execute add-comment output(s)
+          COMMENT_FILES=$(find /tmp/outputs -name "add-comment*.json" 2>/dev/null || true)
 
-            # Validate JSON structure
-            if ! jq empty /tmp/outputs/add-comment.json 2>/dev/null; then
-              echo "- **add-comment**: Invalid JSON format" > /tmp/validation-errors/add-comment.txt
-            else
+          if [ -n "$COMMENT_FILES" ]; then
+            # Count files
+            FILE_COUNT=$(echo "$COMMENT_FILES" | wc -l)
+            echo "Found $FILE_COUNT add-comment output file(s)"
+
+            # Check max constraint
+            
+            if [ "$FILE_COUNT" -gt 1 ]; then
+              echo "- **add-comment**: Too many comment files ($FILE_COUNT). Maximum allowed: 1" > /tmp/validation-errors/add-comment.txt
+              exit 0
+            fi
+
+            # Process each file
+            for comment_file in $COMMENT_FILES; do
+              echo "Validating $comment_file..."
+
+              # Validate JSON structure
+              if ! jq empty "$comment_file" 2>/dev/null; then
+                echo "- **add-comment**: Invalid JSON format in $comment_file" >> /tmp/validation-errors/add-comment.txt
+                continue
+              fi
+
               # Extract body
-              COMMENT_BODY=$(jq -r '.body' /tmp/outputs/add-comment.json)
+              COMMENT_BODY=$(jq -r '.body' "$comment_file")
 
               # Validate body is non-empty
               if [ -z "$COMMENT_BODY" ] || [ "$COMMENT_BODY" = "null" ]; then
-                echo "- **add-comment**: Comment body is empty or missing" > /tmp/validation-errors/add-comment.txt
+                echo "- **add-comment**: Comment body is empty or missing in $comment_file" >> /tmp/validation-errors/add-comment.txt
+                continue
               elif [ ${#COMMENT_BODY} -gt 65536 ]; then
-                echo "- **add-comment**: Comment body exceeds 65536 characters" > /tmp/validation-errors/add-comment.txt
-              else
-                # Validation passed - execute
-                echo "✓ add-comment validation passed"
-
-                # Check if we have an issue/PR number
-                ISSUE_NUMBER="${{ github.event.issue.number }}"
-                if [ -z "$ISSUE_NUMBER" ]; then
-                  echo "- **add-comment**: No issue or PR number available" > /tmp/validation-errors/add-comment.txt
-                else
-                  # Add comment via GitHub API
-                  gh api "repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments" \
-                    -f body="$COMMENT_BODY" || {
-                    echo "- **add-comment**: Failed to post comment via GitHub API" > /tmp/validation-errors/add-comment.txt
-                  }
-                fi
+                echo "- **add-comment**: Comment body exceeds 65536 characters in $comment_file" >> /tmp/validation-errors/add-comment.txt
+                continue
               fi
-            fi
+
+              # Validation passed - execute
+              echo "✓ add-comment validation passed for $comment_file"
+
+              # Check if we have an issue/PR number
+              ISSUE_NUMBER="${{ github.event.issue.number }}"
+              if [ -z "$ISSUE_NUMBER" ]; then
+                echo "- **add-comment**: No issue or PR number available" >> /tmp/validation-errors/add-comment.txt
+                continue
+              fi
+
+              # Add comment via GitHub API
+              gh api "repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments" \
+                -f body="$COMMENT_BODY" || {
+                echo "- **add-comment**: Failed to post comment from $comment_file via GitHub API" >> /tmp/validation-errors/add-comment.txt
+              }
+            done
           fi
 
 
-          # Validate and execute add-label output
-          if [ -f "/tmp/outputs/add-label.json" ]; then
-            echo "Validating add-label output..."
+          # Validate and execute add-label output(s)
+          LABEL_FILES=$(find /tmp/outputs -name "add-label*.json" 2>/dev/null || true)
 
-            # Validate JSON structure
-            if ! jq empty /tmp/outputs/add-label.json 2>/dev/null; then
-              echo "- **add-label**: Invalid JSON format" > /tmp/validation-errors/add-label.txt
-            else
+          if [ -n "$LABEL_FILES" ]; then
+            FILE_COUNT=$(echo "$LABEL_FILES" | wc -l)
+            echo "Found $FILE_COUNT add-label output file(s)"
+
+            # Collect all labels from all files
+            ALL_LABELS="[]"
+            INVALID_LABELS=""
+
+            # Fetch existing labels from repository
+            EXISTING_LABELS=$(gh api "repos/${{ github.repository }}/labels" --jq '[.[].name]' 2>/dev/null || echo '[]')
+
+            # Process each file
+            for label_file in $LABEL_FILES; do
+              echo "Validating $label_file..."
+
+              # Validate JSON structure
+              if ! jq empty "$label_file" 2>/dev/null; then
+                echo "- **add-label**: Invalid JSON format in $label_file" >> /tmp/validation-errors/add-label.txt
+                continue
+              fi
+
               # Extract labels array
-              LABELS_ARRAY=$(jq -r '.labels' /tmp/outputs/add-label.json 2>/dev/null)
+              LABELS_ARRAY=$(jq -r '.labels' "$label_file" 2>/dev/null)
 
               # Validate labels is an array
               if [ "$LABELS_ARRAY" = "null" ] || ! echo "$LABELS_ARRAY" | jq -e 'type == "array"' >/dev/null 2>&1; then
-                echo "- **add-label**: labels field must be an array" > /tmp/validation-errors/add-label.txt
+                echo "- **add-label**: labels field must be an array in $label_file" >> /tmp/validation-errors/add-label.txt
+                continue
               elif [ "$(echo "$LABELS_ARRAY" | jq 'length')" -eq 0 ]; then
-                echo "- **add-label**: labels array cannot be empty" > /tmp/validation-errors/add-label.txt
-              else
-                # Fetch existing labels from repository
-                EXISTING_LABELS=$(gh api "repos/${{ github.repository }}/labels" --jq '[.[].name]' 2>/dev/null || echo '[]')
+                echo "- **add-label**: labels array cannot be empty in $label_file" >> /tmp/validation-errors/add-label.txt
+                continue
+              fi
 
-                # Validate each label exists
-                INVALID_LABELS=""
-                for label in $(echo "$LABELS_ARRAY" | jq -r '.[]'); do
-                  if ! echo "$EXISTING_LABELS" | jq -e --arg label "$label" 'index($label)' >/dev/null 2>&1; then
-                    if [ -z "$INVALID_LABELS" ]; then
-                      INVALID_LABELS="$label"
-                    else
-                      INVALID_LABELS="$INVALID_LABELS, $label"
-                    fi
-                  fi
-                done
-
-                # If there are invalid labels, write error and skip execution
-                if [ -n "$INVALID_LABELS" ]; then
-                  echo "- **add-label**: The following labels do not exist in the repository: $INVALID_LABELS" > /tmp/validation-errors/add-label.txt
-                else
-                  # Validation passed - execute
-                  echo "✓ add-label validation passed"
-
-                  # Check if we have an issue/PR number
-                  ISSUE_NUMBER="${{ github.event.issue.number }}"
-                  if [ -z "$ISSUE_NUMBER" ]; then
-                    echo "- **add-label**: No issue or PR number available" > /tmp/validation-errors/add-label.txt
+              # Validate each label exists
+              for label in $(echo "$LABELS_ARRAY" | jq -r '.[]'); do
+                if ! echo "$EXISTING_LABELS" | jq -e --arg label "$label" 'index($label)' >/dev/null 2>&1; then
+                  if [ -z "$INVALID_LABELS" ]; then
+                    INVALID_LABELS="$label"
                   else
-                    # Get current labels and merge with new ones to avoid overwriting
-                    CURRENT_LABELS=$(gh api "repos/${{ github.repository }}/issues/$ISSUE_NUMBER" --jq '.labels[].name' 2>/dev/null | jq -R . | jq -s .)
-                    NEW_LABELS=$(echo "$LABELS_ARRAY" | jq -r '.[]' | jq -R . | jq -s .)
-                    MERGED_LABELS=$(echo "$CURRENT_LABELS" "$NEW_LABELS" | jq -s 'add | unique')
-
-                    # Add labels via GitHub API
-                    echo "$MERGED_LABELS" | gh api "repos/${{ github.repository }}/issues/$ISSUE_NUMBER/labels" \
-                      -X PUT \
-                      --input - || {
-                      echo "- **add-label**: Failed to add labels via GitHub API" > /tmp/validation-errors/add-label.txt
-                    }
+                    INVALID_LABELS="$INVALID_LABELS, $label"
                   fi
                 fi
+              done
+
+              # Merge labels
+              ALL_LABELS=$(echo "$ALL_LABELS" "$LABELS_ARRAY" | jq -s 'add | unique')
+            done
+
+            # If there are invalid labels, write error and skip execution
+            if [ -n "$INVALID_LABELS" ]; then
+              echo "- **add-label**: The following labels do not exist in the repository: $INVALID_LABELS" > /tmp/validation-errors/add-label.txt
+            elif [ "$(echo "$ALL_LABELS" | jq 'length')" -eq 0 ]; then
+              echo "No valid labels to add"
+            else
+              # Validation passed - execute
+              echo "✓ add-label validation passed"
+
+              # Check if we have an issue/PR number
+              ISSUE_NUMBER="${{ github.event.issue.number }}"
+              if [ -z "$ISSUE_NUMBER" ]; then
+                echo "- **add-label**: No issue or PR number available" > /tmp/validation-errors/add-label.txt
+              else
+                # Get current labels and merge with new ones to avoid overwriting
+                CURRENT_LABELS=$(gh api "repos/${{ github.repository }}/issues/$ISSUE_NUMBER" --jq '.labels[].name' 2>/dev/null | jq -R . | jq -s .)
+                MERGED_LABELS=$(echo "$CURRENT_LABELS" "$ALL_LABELS" | jq -s 'add | unique')
+
+                # Add labels via GitHub API
+                echo "$MERGED_LABELS" | gh api "repos/${{ github.repository }}/issues/$ISSUE_NUMBER/labels" \
+                  -X PUT \
+                  --input - || {
+                  echo "- **add-label**: Failed to add labels via GitHub API" > /tmp/validation-errors/add-label.txt
+                }
               fi
             fi
           fi

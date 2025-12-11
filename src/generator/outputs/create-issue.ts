@@ -17,6 +17,8 @@ Create a new issue in the repository.
 
 **File to create**: \`/tmp/outputs/create-issue.json\`
 
+For multiple issues, use numbered suffixes: \`create-issue-1.json\`, \`create-issue-2.json\`, etc.
+
 **JSON Schema**:
 \`\`\`json
 {
@@ -51,63 +53,87 @@ Create \`/tmp/outputs/create-issue.json\` with:
 **Important**: Use the Write tool to create this file. Only create issues when necessary.`;
   }
 
-  generateValidationScript(_config: OutputConfig, runtime: RuntimeContext): string {
-    return `
-# Validate and execute create-issue output
-if [ -f "/tmp/outputs/create-issue.json" ]; then
-  echo "Validating create-issue output..."
+  generateValidationScript(config: OutputConfig, runtime: RuntimeContext): string {
+    const maxConstraint = config.max;
 
-  # Validate JSON structure
-  if ! jq empty /tmp/outputs/create-issue.json 2>/dev/null; then
-    echo "- **create-issue**: Invalid JSON format" > /tmp/validation-errors/create-issue.txt
-  else
+    return `
+# Validate and execute create-issue output(s)
+ISSUE_FILES=$(find /tmp/outputs -name "create-issue*.json" 2>/dev/null || true)
+
+if [ -n "$ISSUE_FILES" ]; then
+  # Count files
+  FILE_COUNT=$(echo "$ISSUE_FILES" | wc -l)
+  echo "Found $FILE_COUNT create-issue output file(s)"
+
+  # Check max constraint
+  ${maxConstraint ? `
+  if [ "$FILE_COUNT" -gt ${maxConstraint} ]; then
+    echo "- **create-issue**: Too many issue files ($FILE_COUNT). Maximum allowed: ${maxConstraint}" > /tmp/validation-errors/create-issue.txt
+    exit 0
+  fi` : ''}
+
+  # Process each file
+  for issue_file in $ISSUE_FILES; do
+    echo "Validating $issue_file..."
+
+    # Validate JSON structure
+    if ! jq empty "$issue_file" 2>/dev/null; then
+      echo "- **create-issue**: Invalid JSON format in $issue_file" >> /tmp/validation-errors/create-issue.txt
+      continue
+    fi
+
     # Extract fields
-    TITLE=$(jq -r '.title' /tmp/outputs/create-issue.json)
-    BODY=$(jq -r '.body' /tmp/outputs/create-issue.json)
-    LABELS=$(jq -r '.labels // [] | @json' /tmp/outputs/create-issue.json)
-    ASSIGNEES=$(jq -r '.assignees // [] | @json' /tmp/outputs/create-issue.json)
+    TITLE=$(jq -r '.title' "$issue_file")
+    BODY=$(jq -r '.body' "$issue_file")
+    LABELS=$(jq -r '.labels // [] | @json' "$issue_file")
+    ASSIGNEES=$(jq -r '.assignees // [] | @json' "$issue_file")
 
     # Validate required fields
     if [ -z "$TITLE" ] || [ "$TITLE" = "null" ]; then
-      echo "- **create-issue**: title is required" > /tmp/validation-errors/create-issue.txt
+      echo "- **create-issue**: title is required in $issue_file" >> /tmp/validation-errors/create-issue.txt
+      continue
     elif [ -z "$BODY" ] || [ "$BODY" = "null" ]; then
-      echo "- **create-issue**: body is required" > /tmp/validation-errors/create-issue.txt
+      echo "- **create-issue**: body is required in $issue_file" >> /tmp/validation-errors/create-issue.txt
+      continue
     elif [ \${#TITLE} -gt 256 ]; then
-      echo "- **create-issue**: title exceeds 256 characters" > /tmp/validation-errors/create-issue.txt
-    else
-      # Validate labels if provided
-      if [ "$LABELS" != "[]" ]; then
-        EXISTING_LABELS=$(gh api "repos/${runtime.repository}/labels" --jq '[.[].name]' 2>/dev/null || echo '[]')
-        for label in $(echo "$LABELS" | jq -r '.[]'); do
-          if ! echo "$EXISTING_LABELS" | jq -e --arg label "$label" 'index($label)' >/dev/null 2>&1; then
-            echo "- **create-issue**: Label '$label' does not exist in repository" >> /tmp/validation-errors/create-issue.txt
-          fi
-        done
-
-        # If errors exist, skip execution
-        if [ -f "/tmp/validation-errors/create-issue.txt" ]; then
-          exit 0
-        fi
-      fi
-
-      # Validation passed - execute
-      echo "✓ create-issue validation passed"
-
-      # Build API payload
-      PAYLOAD=$(jq -n \\
-        --arg title "$TITLE" \\
-        --arg body "$BODY" \\
-        --argjson labels "$LABELS" \\
-        --argjson assignees "$ASSIGNEES" \\
-        '{title: $title, body: $body, labels: $labels, assignees: $assignees}')
-
-      # Create issue via GitHub API
-      gh api "repos/${runtime.repository}/issues" \\
-        --input - <<< "$PAYLOAD" || {
-        echo "- **create-issue**: Failed to create issue via GitHub API" > /tmp/validation-errors/create-issue.txt
-      }
+      echo "- **create-issue**: title exceeds 256 characters in $issue_file" >> /tmp/validation-errors/create-issue.txt
+      continue
     fi
-  fi
+
+    # Validate labels if provided
+    if [ "$LABELS" != "[]" ]; then
+      EXISTING_LABELS=$(gh api "repos/${runtime.repository}/labels" --jq '[.[].name]' 2>/dev/null || echo '[]')
+      LABEL_ERRORS=""
+      for label in $(echo "$LABELS" | jq -r '.[]'); do
+        if ! echo "$EXISTING_LABELS" | jq -e --arg label "$label" 'index($label)' >/dev/null 2>&1; then
+          LABEL_ERRORS="$LABEL_ERRORS Label '$label' does not exist;"
+        fi
+      done
+
+      # If label errors exist, skip this file
+      if [ -n "$LABEL_ERRORS" ]; then
+        echo "- **create-issue**: $LABEL_ERRORS in $issue_file" >> /tmp/validation-errors/create-issue.txt
+        continue
+      fi
+    fi
+
+    # Validation passed - execute
+    echo "✓ create-issue validation passed for $issue_file"
+
+    # Build API payload
+    PAYLOAD=$(jq -n \\
+      --arg title "$TITLE" \\
+      --arg body "$BODY" \\
+      --argjson labels "$LABELS" \\
+      --argjson assignees "$ASSIGNEES" \\
+      '{title: $title, body: $body, labels: $labels, assignees: $assignees}')
+
+    # Create issue via GitHub API
+    gh api "repos/${runtime.repository}/issues" \\
+      --input - <<< "$PAYLOAD" || {
+      echo "- **create-issue**: Failed to create issue from $issue_file via GitHub API" >> /tmp/validation-errors/create-issue.txt
+    }
+  done
 fi
 `;
   }

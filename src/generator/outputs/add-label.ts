@@ -32,6 +32,8 @@ Add one or more labels to the current issue or pull request.
 
 **File to create**: \`/tmp/outputs/add-label.json\`
 
+For multiple label operations, use numbered suffixes: \`add-label-1.json\`, \`add-label-2.json\`, etc.
+
 **JSON Schema**:
 \`\`\`json
 {
@@ -63,63 +65,81 @@ Create \`/tmp/outputs/add-label.json\` with:
     const issueOrPrNumber = runtime.issueNumber || runtime.prNumber;
 
     return `
-# Validate and execute add-label output
-if [ -f "/tmp/outputs/add-label.json" ]; then
-  echo "Validating add-label output..."
+# Validate and execute add-label output(s)
+LABEL_FILES=$(find /tmp/outputs -name "add-label*.json" 2>/dev/null || true)
 
-  # Validate JSON structure
-  if ! jq empty /tmp/outputs/add-label.json 2>/dev/null; then
-    echo "- **add-label**: Invalid JSON format" > /tmp/validation-errors/add-label.txt
-  else
+if [ -n "$LABEL_FILES" ]; then
+  FILE_COUNT=$(echo "$LABEL_FILES" | wc -l)
+  echo "Found $FILE_COUNT add-label output file(s)"
+
+  # Collect all labels from all files
+  ALL_LABELS="[]"
+  INVALID_LABELS=""
+
+  # Fetch existing labels from repository
+  EXISTING_LABELS=$(gh api "repos/${runtime.repository}/labels" --jq '[.[].name]' 2>/dev/null || echo '[]')
+
+  # Process each file
+  for label_file in $LABEL_FILES; do
+    echo "Validating $label_file..."
+
+    # Validate JSON structure
+    if ! jq empty "$label_file" 2>/dev/null; then
+      echo "- **add-label**: Invalid JSON format in $label_file" >> /tmp/validation-errors/add-label.txt
+      continue
+    fi
+
     # Extract labels array
-    LABELS_ARRAY=$(jq -r '.labels' /tmp/outputs/add-label.json 2>/dev/null)
+    LABELS_ARRAY=$(jq -r '.labels' "$label_file" 2>/dev/null)
 
     # Validate labels is an array
     if [ "$LABELS_ARRAY" = "null" ] || ! echo "$LABELS_ARRAY" | jq -e 'type == "array"' >/dev/null 2>&1; then
-      echo "- **add-label**: labels field must be an array" > /tmp/validation-errors/add-label.txt
+      echo "- **add-label**: labels field must be an array in $label_file" >> /tmp/validation-errors/add-label.txt
+      continue
     elif [ "$(echo "$LABELS_ARRAY" | jq 'length')" -eq 0 ]; then
-      echo "- **add-label**: labels array cannot be empty" > /tmp/validation-errors/add-label.txt
-    else
-      # Fetch existing labels from repository
-      EXISTING_LABELS=$(gh api "repos/${runtime.repository}/labels" --jq '[.[].name]' 2>/dev/null || echo '[]')
+      echo "- **add-label**: labels array cannot be empty in $label_file" >> /tmp/validation-errors/add-label.txt
+      continue
+    fi
 
-      # Validate each label exists
-      INVALID_LABELS=""
-      for label in $(echo "$LABELS_ARRAY" | jq -r '.[]'); do
-        if ! echo "$EXISTING_LABELS" | jq -e --arg label "$label" 'index($label)' >/dev/null 2>&1; then
-          if [ -z "$INVALID_LABELS" ]; then
-            INVALID_LABELS="$label"
-          else
-            INVALID_LABELS="$INVALID_LABELS, $label"
-          fi
-        fi
-      done
-
-      # If there are invalid labels, write error and skip execution
-      if [ -n "$INVALID_LABELS" ]; then
-        echo "- **add-label**: The following labels do not exist in the repository: $INVALID_LABELS" > /tmp/validation-errors/add-label.txt
-      else
-        # Validation passed - execute
-        echo "✓ add-label validation passed"
-
-        # Check if we have an issue/PR number
-        ISSUE_NUMBER="${issueOrPrNumber}"
-        if [ -z "$ISSUE_NUMBER" ]; then
-          echo "- **add-label**: No issue or PR number available" > /tmp/validation-errors/add-label.txt
+    # Validate each label exists
+    for label in $(echo "$LABELS_ARRAY" | jq -r '.[]'); do
+      if ! echo "$EXISTING_LABELS" | jq -e --arg label "$label" 'index($label)' >/dev/null 2>&1; then
+        if [ -z "$INVALID_LABELS" ]; then
+          INVALID_LABELS="$label"
         else
-          # Get current labels and merge with new ones to avoid overwriting
-          CURRENT_LABELS=$(gh api "repos/${runtime.repository}/issues/$ISSUE_NUMBER" --jq '.labels[].name' 2>/dev/null | jq -R . | jq -s .)
-          NEW_LABELS=$(echo "$LABELS_ARRAY" | jq -r '.[]' | jq -R . | jq -s .)
-          MERGED_LABELS=$(echo "$CURRENT_LABELS" "$NEW_LABELS" | jq -s 'add | unique')
-
-          # Add labels via GitHub API
-          echo "$MERGED_LABELS" | gh api "repos/${runtime.repository}/issues/$ISSUE_NUMBER/labels" \\
-            -X PUT \\
-            --input - || {
-            echo "- **add-label**: Failed to add labels via GitHub API" > /tmp/validation-errors/add-label.txt
-          }
+          INVALID_LABELS="$INVALID_LABELS, $label"
         fi
       fi
+    done
+
+    # Merge labels
+    ALL_LABELS=$(echo "$ALL_LABELS" "$LABELS_ARRAY" | jq -s 'add | unique')
+  done
+
+  # If there are invalid labels, write error and skip execution
+  if [ -n "$INVALID_LABELS" ]; then
+    echo "- **add-label**: The following labels do not exist in the repository: $INVALID_LABELS" > /tmp/validation-errors/add-label.txt
+  elif [ "$(echo "$ALL_LABELS" | jq 'length')" -eq 0 ]; then
+    echo "No valid labels to add"
+  else
+    # Validation passed - execute
+    echo "✓ add-label validation passed"
+
+    # Check if we have an issue/PR number
+    ISSUE_NUMBER="${issueOrPrNumber}"
+    if [ -z "$ISSUE_NUMBER" ]; then
+      echo "- **add-label**: No issue or PR number available" > /tmp/validation-errors/add-label.txt
+    else
+      # Get current labels and merge with new ones to avoid overwriting
+      CURRENT_LABELS=$(gh api "repos/${runtime.repository}/issues/$ISSUE_NUMBER" --jq '.labels[].name' 2>/dev/null | jq -R . | jq -s .)
+      MERGED_LABELS=$(echo "$CURRENT_LABELS" "$ALL_LABELS" | jq -s 'add | unique')
+
+      # Add labels via GitHub API
+      echo "$MERGED_LABELS" | gh api "repos/${runtime.repository}/issues/$ISSUE_NUMBER/labels" \\
+        -X PUT \\
+        --input - || {
+        echo "- **add-label**: Failed to add labels via GitHub API" > /tmp/validation-errors/add-label.txt
+      }
     fi
   fi
 fi

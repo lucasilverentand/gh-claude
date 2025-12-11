@@ -17,6 +17,8 @@ Add a comment to the current issue or pull request.
 
 **File to create**: \`/tmp/outputs/add-comment.json\`
 
+For multiple comments, use numbered suffixes: \`add-comment-1.json\`, \`add-comment-2.json\`, etc.
+
 **JSON Schema**:
 \`\`\`json
 {
@@ -39,46 +41,71 @@ Create \`/tmp/outputs/add-comment.json\` with:
 }
 \`\`\`
 
+Or for multiple comments:
+- \`/tmp/outputs/add-comment-1.json\`
+- \`/tmp/outputs/add-comment-2.json\`
+
 **Important**: Use the Write tool to create this file. Only create the file when you're ready to post the comment.`;
   }
 
-  generateValidationScript(_config: OutputConfig, runtime: RuntimeContext): string {
+  generateValidationScript(config: OutputConfig, runtime: RuntimeContext): string {
     const issueOrPrNumber = runtime.issueNumber || runtime.prNumber;
+    const maxConstraint = config.max;
 
     return `
-# Validate and execute add-comment output
-if [ -f "/tmp/outputs/add-comment.json" ]; then
-  echo "Validating add-comment output..."
+# Validate and execute add-comment output(s)
+COMMENT_FILES=$(find /tmp/outputs -name "add-comment*.json" 2>/dev/null || true)
 
-  # Validate JSON structure
-  if ! jq empty /tmp/outputs/add-comment.json 2>/dev/null; then
-    echo "- **add-comment**: Invalid JSON format" > /tmp/validation-errors/add-comment.txt
-  else
+if [ -n "$COMMENT_FILES" ]; then
+  # Count files
+  FILE_COUNT=$(echo "$COMMENT_FILES" | wc -l)
+  echo "Found $FILE_COUNT add-comment output file(s)"
+
+  # Check max constraint
+  ${maxConstraint ? `
+  if [ "$FILE_COUNT" -gt ${maxConstraint} ]; then
+    echo "- **add-comment**: Too many comment files ($FILE_COUNT). Maximum allowed: ${maxConstraint}" > /tmp/validation-errors/add-comment.txt
+    exit 0
+  fi` : ''}
+
+  # Process each file
+  for comment_file in $COMMENT_FILES; do
+    echo "Validating $comment_file..."
+
+    # Validate JSON structure
+    if ! jq empty "$comment_file" 2>/dev/null; then
+      echo "- **add-comment**: Invalid JSON format in $comment_file" >> /tmp/validation-errors/add-comment.txt
+      continue
+    fi
+
     # Extract body
-    COMMENT_BODY=$(jq -r '.body' /tmp/outputs/add-comment.json)
+    COMMENT_BODY=$(jq -r '.body' "$comment_file")
 
     # Validate body is non-empty
     if [ -z "$COMMENT_BODY" ] || [ "$COMMENT_BODY" = "null" ]; then
-      echo "- **add-comment**: Comment body is empty or missing" > /tmp/validation-errors/add-comment.txt
+      echo "- **add-comment**: Comment body is empty or missing in $comment_file" >> /tmp/validation-errors/add-comment.txt
+      continue
     elif [ \${#COMMENT_BODY} -gt 65536 ]; then
-      echo "- **add-comment**: Comment body exceeds 65536 characters" > /tmp/validation-errors/add-comment.txt
-    else
-      # Validation passed - execute
-      echo "✓ add-comment validation passed"
-
-      # Check if we have an issue/PR number
-      ISSUE_NUMBER="${issueOrPrNumber}"
-      if [ -z "$ISSUE_NUMBER" ]; then
-        echo "- **add-comment**: No issue or PR number available" > /tmp/validation-errors/add-comment.txt
-      else
-        # Add comment via GitHub API
-        gh api "repos/${runtime.repository}/issues/$ISSUE_NUMBER/comments" \\
-          -f body="$COMMENT_BODY" || {
-          echo "- **add-comment**: Failed to post comment via GitHub API" > /tmp/validation-errors/add-comment.txt
-        }
-      fi
+      echo "- **add-comment**: Comment body exceeds 65536 characters in $comment_file" >> /tmp/validation-errors/add-comment.txt
+      continue
     fi
-  fi
+
+    # Validation passed - execute
+    echo "✓ add-comment validation passed for $comment_file"
+
+    # Check if we have an issue/PR number
+    ISSUE_NUMBER="${issueOrPrNumber}"
+    if [ -z "$ISSUE_NUMBER" ]; then
+      echo "- **add-comment**: No issue or PR number available" >> /tmp/validation-errors/add-comment.txt
+      continue
+    fi
+
+    # Add comment via GitHub API
+    gh api "repos/${runtime.repository}/issues/$ISSUE_NUMBER/comments" \\
+      -f body="$COMMENT_BODY" || {
+      echo "- **add-comment**: Failed to post comment from $comment_file via GitHub API" >> /tmp/validation-errors/add-comment.txt
+    }
+  done
 fi
 `;
   }
