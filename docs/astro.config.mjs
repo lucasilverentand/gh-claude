@@ -23,20 +23,48 @@ export default defineConfig({
           items: [
             { label: 'Installation', slug: 'getting-started/installation' },
             { label: 'Quick Start', slug: 'getting-started/quick-start' },
+            { label: 'Authentication', slug: 'guide/authentication' },
           ],
         },
         {
-          label: 'Guide',
+          label: 'Core Concepts',
           items: [
+            { label: 'How It Works', slug: 'guide/how-it-works' },
             { label: 'Agent Definition', slug: 'guide/agent-definition' },
-            { label: 'Outputs', slug: 'guide/outputs' },
             { label: 'Permissions', slug: 'guide/permissions' },
+            { label: 'Triggers Overview', slug: 'triggers' },
+          ],
+        },
+        {
+          label: 'Inputs',
+          items: [
+            { label: 'Overview', slug: 'inputs' },
+            { label: 'Issues', slug: 'inputs/issues' },
+            { label: 'Pull Requests', slug: 'inputs/pull-requests' },
+            { label: 'Discussions', slug: 'inputs/discussions' },
+            { label: 'Commits', slug: 'inputs/commits' },
+            { label: 'Releases', slug: 'inputs/releases' },
+            { label: 'Workflow Runs', slug: 'inputs/workflow-runs' },
+            { label: 'Stars & Forks', slug: 'inputs/stars-and-forks' },
+            { label: 'Time Filtering', slug: 'inputs/time-filtering' },
+          ],
+        },
+        {
+          label: 'Outputs',
+          items: [
+            { label: 'Overview', slug: 'outputs' },
+            { label: 'Comments', slug: 'outputs/comments' },
+            { label: 'Labels', slug: 'outputs/labels' },
+            { label: 'Issues', slug: 'outputs/issues' },
+            { label: 'Pull Requests', slug: 'outputs/pull-requests' },
+            { label: 'Discussions', slug: 'outputs/discussions' },
+            { label: 'Files', slug: 'outputs/files' },
           ],
         },
         {
           label: 'Triggers',
+          collapsed: true,
           items: [
-            { label: 'Overview', slug: 'triggers' },
             { label: 'Issues', slug: 'triggers/issues' },
             { label: 'Pull Requests', slug: 'triggers/pull-requests' },
             { label: 'Discussions', slug: 'triggers/discussions' },
@@ -46,7 +74,8 @@ export default defineConfig({
           ],
         },
         {
-          label: 'CLI Reference',
+          label: 'CLI Commands',
+          collapsed: true,
           items: [
             { label: 'init', slug: 'cli/init' },
             { label: 'compile', slug: 'cli/compile' },
@@ -63,10 +92,20 @@ export default defineConfig({
           ],
         },
         {
-          label: 'Reference',
+          label: 'Advanced',
           items: [
+            { label: 'Advanced Topics', slug: 'guide/advanced' },
+            { label: 'Troubleshooting', slug: 'guide/troubleshooting' },
+          ],
+        },
+        {
+          label: 'Reference',
+          collapsed: true,
+          items: [
+            { label: 'Quick Reference', slug: 'reference/quick-reference' },
             { label: 'Configuration', slug: 'reference/configuration' },
             { label: 'Security', slug: 'reference/security' },
+            { label: 'FAQ', slug: 'reference/faq' },
           ],
         },
       ],
