@@ -1,5 +1,5 @@
-import { toKebabCase, agentNameToWorkflowName, findMarkdownFiles } from './files';
-import { writeFileSync, mkdtempSync } from 'fs';
+import { toKebabCase, agentNameToWorkflowName, findMarkdownFiles, fileExists } from './files';
+import { writeFileSync, mkdtempSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
@@ -72,6 +72,36 @@ describe('files utils', () => {
 
       expect(files[0]).toContain('alpha.md');
       expect(files[1]).toContain('zebra.md');
+    });
+  });
+
+  describe('fileExists', () => {
+    it('should return true for existing file', async () => {
+      const tempDir = mkdtempSync(join(tmpdir(), 'gh-claude-test-'));
+      const filePath = join(tempDir, 'test.txt');
+      writeFileSync(filePath, 'test content');
+
+      const exists = await fileExists(filePath);
+      expect(exists).toBe(true);
+    });
+
+    it('should return true for existing directory', async () => {
+      const tempDir = mkdtempSync(join(tmpdir(), 'gh-claude-test-'));
+      const dirPath = join(tempDir, 'subdir');
+      mkdirSync(dirPath);
+
+      const exists = await fileExists(dirPath);
+      expect(exists).toBe(true);
+    });
+
+    it('should return false for non-existent file', async () => {
+      const exists = await fileExists('/non/existent/file.txt');
+      expect(exists).toBe(false);
+    });
+
+    it('should return false for non-existent directory', async () => {
+      const exists = await fileExists('/non/existent/directory');
+      expect(exists).toBe(false);
     });
   });
 });
