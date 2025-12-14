@@ -37,7 +37,7 @@ allowed-paths:
   - '*.tsx'
   - '*.js'
   - '*.jsx'
-rate_limit_minutes: 360  # Once every 6 hours max
+rate_limit_minutes: 5  # Temporarily lowered for testing
 audit:
   create_issues: true
   labels:
