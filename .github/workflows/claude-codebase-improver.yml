@@ -594,16 +594,16 @@ jobs:
                   exit 0
                 fi
 
-                # Create/update each file
-                for file_info in $(echo "$FILES" | jq -c '.[]'); do
-                  FILE_PATH=$(echo "$file_info" | jq -r '.path')
-                  FILE_CONTENT=$(echo "$file_info" | jq -r '.content')
+                # Create/update each file using jq to extract paths and contents safely
+                FILE_COUNT=$(jq '.files | length' /tmp/outputs/create-pr.json)
+                for i in $(seq 0 $((FILE_COUNT - 1))); do
+                  FILE_PATH=$(jq -r ".files[$i].path" /tmp/outputs/create-pr.json)
 
                   # Create directory if needed
                   mkdir -p "$(dirname "$FILE_PATH")"
 
-                  # Write file content
-                  echo "$FILE_CONTENT" > "$FILE_PATH"
+                  # Write file content directly using jq (handles special chars properly)
+                  jq -r ".files[$i].content" /tmp/outputs/create-pr.json > "$FILE_PATH"
 
                   # Stage file
                   git add "$FILE_PATH"
