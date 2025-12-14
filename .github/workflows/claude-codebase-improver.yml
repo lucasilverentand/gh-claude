@@ -645,6 +645,21 @@ jobs:
               # Return to main branch before creating new branch
               git checkout main 2>/dev/null || git checkout master 2>/dev/null || true
 
+              # Check if PR already exists for this branch
+              if gh pr view "$BRANCH" --json state --jq '.state' 2>/dev/null | grep -q "OPEN"; then
+                echo "⏭️ PR already exists for branch '$BRANCH', skipping"
+                continue
+              fi
+
+              # Delete existing remote branch if it exists (from previous failed attempts)
+              if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+                echo "🗑️ Deleting existing remote branch '$BRANCH'"
+                git push origin --delete "$BRANCH" 2>/dev/null || true
+              fi
+
+              # Delete local branch if it exists
+              git branch -D "$BRANCH" 2>/dev/null || true
+
               # Create and checkout new branch
               if ! git checkout -b "$BRANCH" 2>/dev/null; then
                 echo "- **$PR_NAME**: Failed to create branch '$BRANCH'" >> /tmp/validation-errors/create-pr.txt
