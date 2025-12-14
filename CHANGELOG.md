@@ -7,7 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.0] - 2025-12-03
+## [0.2.0](https://github.com/lucasilverentand/gh-claude/compare/v0.1.0...v0.2.0) (2024-12-14)
+
+### Features
+
+* **audit:** add two-tier audit system with safe-mode diagnostic agent ([493bfac](https://github.com/lucasilverentand/gh-claude/commit/493bfac))
+  * Audit configuration in agent frontmatter (`create_issues`, `labels`, `assignees`)
+  * Capture Claude execution metrics (cost, turns, duration, session ID)
+  * Track permission issues and validation failures during pre-flight
+  * Two-tier behavior: quiet mode on success, alert mode on failure
+  * Run safe-mode diagnostic agent (read-only tools) to analyze failures
+  * Auto-create GitHub issues with diagnosis and remediation steps
+  * Deduplicate issues by adding comments to existing open issues
+
+## [0.1.0] - 2024-12-03
 
 ### Added
 
@@ -112,6 +125,6 @@ Each release includes:
 - **Fixed**: Bug fixes
 - **Security**: Security improvements
 
-[Unreleased]: https://github.com/yourusername/gh-claude/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/yourusername/gh-claude/releases/tag/v0.1.0
-[0.0.0]: https://github.com/yourusername/gh-claude/tree/v0.0.0
+[Unreleased]: https://github.com/lucasilverentand/gh-claude/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/lucasilverentand/gh-claude/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/lucasilverentand/gh-claude/releases/tag/v0.1.0
