@@ -99,6 +99,7 @@ export class AgentParser {
       trigger_labels: frontmatter.trigger_labels,
       rate_limit_minutes: frontmatter.rate_limit_minutes,
       inputs: frontmatter.inputs,
+      audit: frontmatter.audit,
       markdown: parsed.content.trim(),
     };
 

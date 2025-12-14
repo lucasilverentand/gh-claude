@@ -12,7 +12,14 @@ export interface AgentDefinition {
   trigger_labels?: string[]; // Labels that must be present to trigger the agent
   rate_limit_minutes?: number; // Minimum minutes between agent runs (default: 5)
   inputs?: InputConfig; // Data collection configuration
+  audit?: AuditConfig; // Audit and failure reporting configuration
   markdown: string;
+}
+
+export interface AuditConfig {
+  create_issues?: boolean; // Whether to create issues on failures (default: true)
+  labels?: string[]; // Labels to add to audit issues
+  assignees?: string[]; // Assignees for audit issues
 }
 
 export interface TriggerConfig {
@@ -266,4 +273,49 @@ export interface GitHubWorkflowRun {
   createdAt: string;
   updatedAt: string;
   author: string;
+}
+
+// Audit Report Types
+export interface ClaudeExecutionMetrics {
+  result: string; // The actual response content
+  total_cost_usd: number; // API cost for the request
+  is_error: boolean; // Boolean error indicator
+  duration_ms: number; // Total execution time in milliseconds
+  duration_api_ms: number; // API-only processing time
+  num_turns: number; // Conversation turn count
+  session_id: string; // Unique conversation identifier
+}
+
+export interface ExecutionAudit {
+  agent_name: string;
+  workflow_run_id: string;
+  workflow_run_url: string;
+  triggered_by: string;
+  trigger_event: string;
+  started_at: string;
+  completed_at: string;
+  metrics: ClaudeExecutionMetrics;
+  validation_status: {
+    secrets_check: boolean;
+    user_authorization: boolean;
+    labels_check: boolean;
+    rate_limit_check: boolean;
+  };
+  outputs_executed: OutputExecutionSummary[];
+  permission_issues: PermissionIssue[];
+}
+
+export interface OutputExecutionSummary {
+  output_type: Output;
+  success: boolean;
+  error_message?: string;
+  details?: Record<string, unknown>;
+}
+
+export interface PermissionIssue {
+  timestamp: string;
+  issue_type: 'missing_permission' | 'path_restriction' | 'rate_limit' | 'validation_error';
+  severity: 'error' | 'warning';
+  message: string;
+  context?: Record<string, unknown>;
 }

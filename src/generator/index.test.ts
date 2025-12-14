@@ -103,10 +103,11 @@ describe('WorkflowGenerator', () => {
       const result = generator.generate(agent);
       const workflow = yaml.load(result) as any;
       const steps = workflow.jobs['claude-agent'].steps;
-      const runStep = steps[steps.length - 1].run;
+      const runStep = steps.find((step: any) => step.name === 'Run Claude Agent');
 
-      expect(runStep).toContain('bunx --bun @anthropic-ai/claude-code');
-      expect(runStep).toContain('-p');
+      expect(runStep).toBeDefined();
+      expect(runStep.run).toContain('bunx --bun @anthropic-ai/claude-code');
+      expect(runStep.run).toContain('-p');
     });
 
     it('should handle multiple trigger types', () => {
@@ -139,10 +140,11 @@ describe('WorkflowGenerator', () => {
       const result = generator.generate(agent);
       const workflow = yaml.load(result) as any;
       const steps = workflow.jobs['claude-agent'].steps;
-      const env = steps[steps.length - 1].env;
+      const runStep = steps.find((step: any) => step.name === 'Run Claude Agent');
 
-      expect(env.ANTHROPIC_API_KEY).toContain('secrets.ANTHROPIC_API_KEY');
-      expect(env.GITHUB_TOKEN).toContain('secrets.GITHUB_TOKEN');
+      expect(runStep).toBeDefined();
+      expect(runStep.env.ANTHROPIC_API_KEY).toContain('secrets.ANTHROPIC_API_KEY');
+      expect(runStep.env.GITHUB_TOKEN).toContain('secrets.GITHUB_TOKEN');
     });
 
     it('should include issue context variables in run script', () => {
@@ -223,11 +225,13 @@ describe('WorkflowGenerator', () => {
 
         const result = generator.generate(agent);
         const workflow = yaml.load(result) as any;
-        const validateStep = workflow.jobs['pre-flight'].steps[0].run;
+        const steps = workflow.jobs['pre-flight'].steps;
+        const secretsStep = steps.find((step: any) => step.name === 'Check secrets');
 
-        expect(validateStep).toContain('ANTHROPIC_API_KEY');
-        expect(validateStep).toContain('CLAUDE_CODE_OAUTH_TOKEN');
-        expect(validateStep).toContain('No Claude authentication found');
+        expect(secretsStep).toBeDefined();
+        expect(secretsStep.run).toContain('ANTHROPIC_API_KEY');
+        expect(secretsStep.run).toContain('CLAUDE_CODE_OAUTH_TOKEN');
+        expect(secretsStep.run).toContain('No Claude authentication found');
       });
 
       it('should include user authorization check in pre-flight job', () => {

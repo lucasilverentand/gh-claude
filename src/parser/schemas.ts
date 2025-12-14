@@ -172,6 +172,17 @@ const inputConfigSchema = z
   })
   .optional();
 
+const auditConfigSchema = z
+  .object({
+    // Whether to create issues on failures (default: true)
+    create_issues: z.boolean().optional(),
+    // Labels to add to audit issues
+    labels: z.array(z.string()).optional(),
+    // Assignees for audit issues
+    assignees: z.array(z.string()).optional(),
+  })
+  .optional();
+
 export const agentFrontmatterSchema = z.object({
   name: z.string().min(1, 'Agent name is required'),
   on: triggerConfigSchema,
@@ -186,6 +197,7 @@ export const agentFrontmatterSchema = z.object({
   trigger_labels: z.array(z.string()).optional(),
   rate_limit_minutes: z.number().min(0).optional(),
   inputs: inputConfigSchema,
+  audit: auditConfigSchema,
 });
 
 export type AgentFrontmatter = z.infer<typeof agentFrontmatterSchema>;
