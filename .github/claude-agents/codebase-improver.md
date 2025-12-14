@@ -128,7 +128,7 @@ Check the `focus_area` workflow input:
 
 ## Output Format
 
-Before creating PRs, output a summary of findings:
+First, output a summary of your findings:
 
 ```
 ## Analysis Summary
@@ -145,13 +145,40 @@ Before creating PRs, output a summary of findings:
 - Item: Reason it was skipped
 ```
 
-Then proceed to create the PRs using Git commands and the GitHub CLI.
+## How to Create PRs
+
+**IMPORTANT**: You MUST use the skill system to create PRs. Check the CLAUDE.md file in your working directory for the exact JSON schema.
+
+For each PR you want to create, write a JSON file to `/tmp/outputs/create-pr.json` (or `create-pr-1.json`, `create-pr-2.json` for multiple PRs).
+
+Example:
+```json
+{
+  "branch": "improve/add-parser-tests",
+  "title": "test: add unit tests for parser edge cases",
+  "body": "## Summary\n\nAdds tests for uncovered edge cases in the parser module.\n\n## Changes\n- Added tests for empty input handling\n- Added tests for malformed frontmatter\n\n## Testing\nRun `npm test` to verify.",
+  "base": "main",
+  "files": [
+    {
+      "path": "src/parser/index.test.ts",
+      "content": "// Full file content here..."
+    }
+  ]
+}
+```
 
 ## Technical Approach
 
-1. Use `Glob` and `Grep` to find files and patterns
-2. Use `Read` to analyze specific files
-3. Use `Bash` with git commands to create branches and commits
-4. Use `Bash` with `gh pr create` to create pull requests
+1. Use `Glob` to find files matching patterns (e.g., `**/*.ts`)
+2. Use `Grep` to search for code patterns
+3. Use `Read` to analyze specific files
+4. Use `Write` to create output files in `/tmp/outputs/`
 
-Remember: Quality over quantity. It's better to create one excellent, well-tested PR than several hasty ones.
+## CRITICAL REQUIREMENTS
+
+- You MUST create at least one PR if you find ANY improvement opportunity
+- Always write the complete file content in the `files` array - not partial diffs
+- The workflow will handle git operations, branch creation, and PR submission automatically
+- If you're unsure whether something is worth a PR, CREATE IT ANYWAY - let the reviewer decide
+
+Remember: It's better to create a small improvement PR than to create nothing at all.
