@@ -1,615 +1,506 @@
 import { writeFile } from 'fs/promises';
-import yaml from 'js-yaml';
-import type { AgentDefinition, WorkflowStep, Output } from '../types';
-import { agentNameToWorkflowName } from '../cli/utils/files';
+import { join } from 'path';
+import { dump as yamlDump } from 'js-yaml';
+import type {
+  AgentDefinition,
+  WorkflowStep,
+  TriggerConfig,
+  PermissionsConfig,
+  OutputConfig,
+  Output,
+  InputConfig,
+} from '../types';
 import { getOutputHandler } from './outputs';
 import type { RuntimeContext } from './outputs/base';
-import { inputCollector } from './input-collector';
+import { InputCollector } from './input-collector';
+import { SkillsGenerator } from './skills';
+import { logger } from '../cli/utils/logger';
 
 export class WorkflowGenerator {
   generate(agent: AgentDefinition): string {
     const workflow: any = {
       name: agent.name,
-      on: this.generateTriggers(agent),
+      on: this.convertTriggers(agent.on),
     };
 
+    // Set permissions at workflow level
     if (agent.permissions) {
-      // Transform permission keys from snake_case to kebab-case for GitHub Actions
-      workflow.permissions = Object.entries(agent.permissions).reduce(
-        (acc, [key, value]) => {
-          const kebabKey = key.replace(/_/g, '-');
-          acc[kebabKey] = value;
-          return acc;
-        },
-        {} as Record<string, string>
-      );
+      workflow.permissions = this.convertPermissions(agent.permissions);
     }
 
-    const preFlightOutputs: Record<string, string> = {
-      'should-run': '$' + '{{ steps.set-output.outputs.should-run }}',
-    };
+    // Use default permissions if none specified
+    if (!workflow.permissions) {
+      workflow.permissions = {
+        contents: 'read',
+      };
+    }
 
+    // Jobs
     workflow.jobs = {
-      'pre-flight': {
-        'runs-on': 'ubuntu-latest',
-        outputs: preFlightOutputs,
-        steps: this.generateValidationSteps(agent),
-      },
+      'pre-flight': this.generatePreFlightJob(agent),
     };
 
     // Add collect-inputs job if inputs are configured
     if (agent.inputs) {
       workflow.jobs['collect-inputs'] = this.generateCollectInputsJob(agent);
-      workflow.jobs['claude-agent'] = {
-        'runs-on': 'ubuntu-latest',
-        needs: ['pre-flight', 'collect-inputs'],
-        if: "needs.pre-flight.outputs.should-run == 'true' && needs.collect-inputs.outputs.has-inputs == 'true'",
-        steps: this.generateClaudeAgentSteps(agent),
-      };
-    } else {
-      workflow.jobs['claude-agent'] = {
-        'runs-on': 'ubuntu-latest',
-        needs: 'pre-flight',
-        if: "needs.pre-flight.outputs.should-run == 'true'",
-        steps: this.generateClaudeAgentSteps(agent),
-      };
     }
 
-    // Add execute-outputs job if outputs are configured
+    workflow.jobs['claude-agent'] = this.generateClaudeAgentJob(agent);
+
+    // Only add execute-outputs job if there are outputs
     if (agent.outputs && Object.keys(agent.outputs).length > 0) {
       workflow.jobs['execute-outputs'] = this.generateExecuteOutputsJob(agent);
       workflow.jobs['report-results'] = this.generateReportResultsJob(agent);
     }
 
-    // Always add audit report job
+    // Always add audit-report job
     workflow.jobs['audit-report'] = this.generateAuditReportJob(agent);
 
-    const yamlContent = yaml.dump(workflow, {
-      lineWidth: -1,
-      noRefs: true,
+    return yamlDump(workflow, {
+      lineWidth: -1, // Disable line wrapping
+      quotingType: '"',
+      forceQuotes: false,
     });
-
-    return this.formatYaml(yamlContent);
   }
 
-  private formatYaml(yamlContent: string): string {
-    const lines = yamlContent.split('\n');
-    const formatted: string[] = [];
-    let previousLineWasStep = false;
-    let inJobs = false;
-    let inSteps = false;
+  async writeWorkflow(agent: AgentDefinition, outputDir: string): Promise<string> {
+    const workflow = this.generate(agent);
+    const fileName = this.agentNameToFileName(agent.name);
+    const outputPath = join(outputDir, fileName);
 
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const trimmed = line.trim();
+    await writeFile(outputPath, workflow, 'utf-8');
 
-      // Track when we enter jobs section
-      if (line === 'jobs:') {
-        inJobs = true;
-        formatted.push(line);
-        continue;
-      }
-
-      // Check if this is a job key (2 spaces indentation, ends with colon, alphanumeric+hyphens)
-      const isJobKey = inJobs && /^\s{2}[a-z-]+:$/.test(line);
-
-      // Check if entering steps section
-      if (trimmed === 'steps:') {
-        inSteps = true;
-        formatted.push(line);
-        previousLineWasStep = false;
-        continue;
-      }
-
-      // Check if exiting steps section
-      if (inSteps && /^\s{2}[a-z-]+:$/.test(line)) {
-        inSteps = false;
-      }
-
-      // Add blank line before job keys (except the very first one after "jobs:")
-      if (isJobKey) {
-        const lastNonEmptyLine = formatted.filter((l) => l.trim() !== '').pop();
-        if (lastNonEmptyLine && lastNonEmptyLine !== 'jobs:') {
-          formatted.push('');
-        }
-        formatted.push(line);
-        previousLineWasStep = false;
-        continue;
-      }
-
-      // Add blank line before each step (except the first one)
-      const isStepStart = inSteps && /^\s{4}-\s/.test(line);
-      if (isStepStart && previousLineWasStep) {
-        formatted.push('');
-      }
-
-      formatted.push(line);
-      previousLineWasStep = isStepStart;
-    }
-
-    return formatted.join('\n');
+    return outputPath;
   }
 
-  private generateTriggers(agent: AgentDefinition): any {
-    const triggers: any = {};
-
-    if (agent.on.issues) {
-      triggers.issues = agent.on.issues;
-    }
-
-    if (agent.on.pull_request) {
-      triggers.pull_request = agent.on.pull_request;
-    }
-
-    if (agent.on.discussion) {
-      triggers.discussion = agent.on.discussion;
-    }
-
-    if (agent.on.schedule) {
-      triggers.schedule = agent.on.schedule;
-    }
-
-    if (agent.on.workflow_dispatch) {
-      triggers.workflow_dispatch = agent.on.workflow_dispatch;
-    }
-
-    if (agent.on.repository_dispatch) {
-      triggers.repository_dispatch = agent.on.repository_dispatch;
-    }
-
-    return triggers;
+  private agentNameToFileName(name: string): string {
+    return (
+      name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') + '.yml'
+    );
   }
 
-  private generateValidationSteps(agent: AgentDefinition): any[] {
-    const allowedUsers = [...(agent.allowed_users || []), ...(agent.allowed_actors || [])];
-    const allowedLabels = agent.trigger_labels || [];
-    const rateLimitMinutes = agent.rate_limit_minutes ?? 5;
+  private convertTriggers(triggers: TriggerConfig): any {
+    const converted: any = {};
 
-    const steps: any[] = [
-      {
-        name: 'Initialize audit tracking',
-        id: 'init-audit',
-        run: `mkdir -p /tmp/audit
-echo '{
-  "secrets_check": false,
-  "user_authorization": false,
-  "labels_check": false,
-  "rate_limit_check": false
-}' > /tmp/audit/validation-status.json
-echo '[]' > /tmp/audit/permission-issues.json`,
+    if (triggers.issues) {
+      converted.issues = triggers.issues;
+    }
+
+    if (triggers.pull_request) {
+      converted.pull_request = triggers.pull_request;
+    }
+
+    if (triggers.discussion) {
+      converted.discussion = triggers.discussion;
+    }
+
+    if (triggers.schedule) {
+      converted.schedule = triggers.schedule;
+    }
+
+    if (triggers.workflow_dispatch) {
+      converted.workflow_dispatch = triggers.workflow_dispatch;
+    }
+
+    if (triggers.repository_dispatch) {
+      converted.repository_dispatch = triggers.repository_dispatch;
+    }
+
+    return converted;
+  }
+
+  private convertPermissions(permissions: PermissionsConfig): any {
+    const converted: any = {};
+
+    if (permissions.contents) {
+      converted.contents = permissions.contents;
+    }
+
+    if (permissions.issues) {
+      converted.issues = permissions.issues;
+    }
+
+    if (permissions.pull_requests) {
+      converted['pull-requests'] = permissions.pull_requests;
+    }
+
+    if (permissions.discussions) {
+      converted.discussions = permissions.discussions;
+    }
+
+    return converted;
+  }
+
+  /**
+   * Generates GitHub App token generation step
+   */
+  private generateTokenGenerationStep(): WorkflowStep {
+    return {
+      name: 'Generate GitHub App Token',
+      id: 'generate-token',
+      uses: 'actions/create-github-app-token@v1',
+      if: "env.GH_APP_ID != '' && env.GH_APP_PRIVATE_KEY != ''",
+      with: {
+        'app-id': '${{ secrets.GH_APP_ID }}',
+        'private-key': '${{ secrets.GH_APP_PRIVATE_KEY }}',
       },
-      this.generateTokenGenerationStep(),
-      {
-        name: 'Check secrets',
-        id: 'check-secrets',
-        env: {
-          ANTHROPIC_API_KEY: '${{ secrets.ANTHROPIC_API_KEY }}',
-          CLAUDE_CODE_OAUTH_TOKEN: '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}',
-        },
-        run: `if [ -z "\${ANTHROPIC_API_KEY}" ] && [ -z "\${CLAUDE_CODE_OAUTH_TOKEN}" ]; then
-  echo "::error::No Claude authentication found. Please set either ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN in your repository secrets."
-  # Track permission issue
-  jq '. += [{
-    "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'",
-    "issue_type": "missing_permission",
-    "severity": "error",
-    "message": "No Claude authentication configured",
-    "context": {"required": ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"]}
-  }]' /tmp/audit/permission-issues.json > /tmp/audit/permission-issues.tmp
-  mv /tmp/audit/permission-issues.tmp /tmp/audit/permission-issues.json
-  echo "validation-failed=true" >> $GITHUB_OUTPUT
-  exit 1
-fi
-
-if [ -n "\${ANTHROPIC_API_KEY}" ]; then
-  echo "✓ ANTHROPIC_API_KEY is configured"
-fi
-if [ -n "\${CLAUDE_CODE_OAUTH_TOKEN}" ]; then
-  echo "✓ CLAUDE_CODE_OAUTH_TOKEN is configured"
-fi
-
-# Mark secrets check as passed
-jq '.secrets_check = true' /tmp/audit/validation-status.json > /tmp/audit/validation-status.tmp
-mv /tmp/audit/validation-status.tmp /tmp/audit/validation-status.json`,
+      env: {
+        GH_APP_ID: '${{ secrets.GH_APP_ID }}',
+        GH_APP_PRIVATE_KEY: '${{ secrets.GH_APP_PRIVATE_KEY }}',
       },
+    };
+  }
+
+  /**
+   * Generates the pre-flight validation job
+   */
+  private generatePreFlightJob(agent: AgentDefinition): any {
+    const steps: WorkflowStep[] = [];
+
+    // Add GitHub App token generation
+    steps.push(this.generateTokenGenerationStep());
+
+    // Validation steps
+    steps.push(...this.generateValidationSteps(agent));
+
+    return {
+      'runs-on': 'ubuntu-latest',
+      outputs: {
+        'should-run': '${{ steps.validation.outputs.should-run }}',
+        'validation-status': '${{ steps.validation.outputs.status }}',
+        'validation-errors': '${{ steps.validation.outputs.errors }}',
+      },
+      steps,
+    };
+  }
+
+  /**
+   * Generates validation steps for pre-flight job
+   */
+  private generateValidationSteps(agent: AgentDefinition): WorkflowStep[] {
+    const allowedUsers = agent.allowed_users || agent.allowed_actors || [];
+    const allowedTeams = agent.allowed_teams || [];
+    const triggerLabels = agent.trigger_labels || [];
+    const rateLimitMinutes = agent.rate_limit_minutes || 5;
+
+    const allowedUsersArray = allowedUsers.length > 0 ? JSON.stringify(allowedUsers) : '[]';
+    const allowedTeamsArray = allowedTeams.length > 0 ? JSON.stringify(allowedTeams) : '[]';
+    const triggerLabelsArray = triggerLabels.length > 0 ? JSON.stringify(triggerLabels) : '[]';
+
+    return [
       {
-        name: 'Check user authorization',
-        id: 'check-user',
+        name: 'Run validation checks',
+        id: 'validation',
         env: {
-          GITHUB_TOKEN: '${{ steps.app-token.outputs.token }}',
+          GITHUB_TOKEN:
+            '${{ steps.generate-token.outputs.token || secrets.GITHUB_TOKEN || github.token }}',
         },
-        run: `ACTOR="\${{ github.actor }}"
+        run: `#!/bin/bash
+set -e
 
-# Get user's association with the repository
-USER_ASSOCIATION=$(gh api "repos/\${{ github.repository }}/collaborators/\${ACTOR}/permission" --jq '.permission' 2>/dev/null || echo "none")
+# Initialize validation status
+VALIDATION_ERRORS=""
+VALIDATION_STATUS="success"
 
-# Check if user is org member (for org repos)
-IS_ORG_MEMBER="false"
-ORG_NAME=$(echo "\${{ github.repository }}" | cut -d'/' -f1)
-if gh api "orgs/\${ORG_NAME}/members/\${ACTOR}" >/dev/null 2>&1; then
-  IS_ORG_MEMBER="true"
+# Check 1: Verify Claude API authentication is available
+if [ -z "\${{ secrets.ANTHROPIC_API_KEY }}" ] && [ -z "\${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}" ]; then
+  echo "❌ Neither ANTHROPIC_API_KEY nor CLAUDE_CODE_OAUTH_TOKEN secret is set"
+  VALIDATION_ERRORS="\${VALIDATION_ERRORS}Missing API credentials. "
+  VALIDATION_STATUS="failed"
+else
+  echo "✅ Claude API credentials found"
 fi
 
-# Allowed if: admin, write access, org member, or in explicit allow list
-ALLOWED_USERS="${allowedUsers.join(' ')}"
-IS_ALLOWED="false"
+# Check 2: Verify user authorization (admin, write access, org member, or in allowed list)
+TRIGGERED_BY="\${{ github.actor }}"
+REPO_OWNER="\${{ github.repository_owner }}"
 
-if [ "\${USER_ASSOCIATION}" = "admin" ] || [ "\${USER_ASSOCIATION}" = "write" ]; then
-  IS_ALLOWED="true"
-  echo "✓ User has \${USER_ASSOCIATION} permission"
-elif [ "\${IS_ORG_MEMBER}" = "true" ]; then
-  IS_ALLOWED="true"
-  echo "✓ User is organization member"
-elif [ -n "\${ALLOWED_USERS}" ]; then
-  for allowed in \${ALLOWED_USERS}; do
-    if [ "\${ACTOR}" = "\${allowed}" ]; then
-      IS_ALLOWED="true"
-      echo "✓ User is in allowed users list"
-      break
+# Get user's permission level
+PERMISSION=$(gh api repos/\${{ github.repository }}/collaborators/\${TRIGGERED_BY}/permission --jq .permission 2>/dev/null || echo "none")
+
+echo "User \${TRIGGERED_BY} has permission level: \${PERMISSION}"
+
+# Check if user has admin or write access
+if [ "\${PERMISSION}" = "admin" ] || [ "\${PERMISSION}" = "write" ]; then
+  echo "✅ User has sufficient repository permissions (\${PERMISSION})"
+  AUTHORIZED=true
+else
+  # Check if user is org member
+  IS_ORG_MEMBER=$(gh api orgs/\${REPO_OWNER}/members/\${TRIGGERED_BY} 2>/dev/null && echo "true" || echo "false")
+  
+  if [ "\${IS_ORG_MEMBER}" = "true" ]; then
+    echo "✅ User is organization member"
+    AUTHORIZED=true
+  else
+    # Check allowed users/teams lists
+    ALLOWED_USERS='${allowedUsersArray}'
+    ALLOWED_TEAMS='${allowedTeamsArray}'
+    
+    # Check if user is in allowed users list
+    if echo "\${ALLOWED_USERS}" | jq -e --arg user "\${TRIGGERED_BY}" 'index(\$user)' > /dev/null; then
+      echo "✅ User is in allowed users list"
+      AUTHORIZED=true
+    # Check if user is in any allowed teams
+    elif [ "\${ALLOWED_TEAMS}" != "[]" ]; then
+      USER_TEAMS=$(gh api user/teams --paginate --jq '.[].slug' 2>/dev/null || echo "")
+      AUTHORIZED=false
+      
+      for team in $(echo "\${ALLOWED_TEAMS}" | jq -r '.[]'); do
+        if echo "\${USER_TEAMS}" | grep -q "^\${team}\$"; then
+          echo "✅ User is in allowed team: \${team}"
+          AUTHORIZED=true
+          break
+        fi
+      done
+      
+      if [ "\${AUTHORIZED}" != "true" ]; then
+        echo "❌ User is not in any allowed teams"
+        VALIDATION_ERRORS="\${VALIDATION_ERRORS}User not authorized. "
+        VALIDATION_STATUS="failed"
+      fi
+    else
+      echo "❌ User is not authorized (no repository access, not org member, not in allowed list)"
+      VALIDATION_ERRORS="\${VALIDATION_ERRORS}User not authorized. "
+      VALIDATION_STATUS="failed"
     fi
-  done
+  fi
 fi
 
-if [ "\${IS_ALLOWED}" = "false" ]; then
-  echo "::warning::User @\${ACTOR} is not authorized to trigger this agent"
-  # Track permission issue
-  jq '. += [{
-    "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'",
-    "issue_type": "missing_permission",
-    "severity": "error",
-    "message": "User not authorized to trigger agent",
-    "context": {"user": "'\${ACTOR}'", "permission": "'\${USER_ASSOCIATION}'"}
-  }]' /tmp/audit/permission-issues.json > /tmp/audit/permission-issues.tmp
-  mv /tmp/audit/permission-issues.tmp /tmp/audit/permission-issues.json
-  echo "validation-failed=true" >> $GITHUB_OUTPUT
-  exit 1
-fi
-
-# Mark user authorization check as passed
-jq '.user_authorization = true' /tmp/audit/validation-status.json > /tmp/audit/validation-status.tmp
-mv /tmp/audit/validation-status.tmp /tmp/audit/validation-status.json`,
-      },
-    ];
-
-    // Only add label check step if labels are configured
-    if (allowedLabels.length > 0) {
-      steps.push({
-        name: 'Check required labels',
-        id: 'check-labels',
-        env: {
-          GITHUB_TOKEN: '${{ steps.app-token.outputs.token }}',
-        },
-        run: `REQUIRED_LABELS="${allowedLabels.join(' ')}"
-ISSUE_NUMBER="\${{ github.event.issue.number }}\${{ github.event.pull_request.number }}"
-
-if [ -n "\${ISSUE_NUMBER}" ]; then
-  CURRENT_LABELS=$(gh api "repos/\${{ github.repository }}/issues/\${ISSUE_NUMBER}" --jq '.labels[].name' 2>/dev/null | tr '\\n' ' ' || echo "")
-
-  LABEL_FOUND="false"
-  for required in \${REQUIRED_LABELS}; do
-    if echo "\${CURRENT_LABELS}" | grep -qw "\${required}"; then
-      LABEL_FOUND="true"
-      echo "✓ Found required label: \${required}"
-      break
+# Check 3: Verify required labels (if configured)
+TRIGGER_LABELS='${triggerLabelsArray}'
+if [ "\${TRIGGER_LABELS}" != "[]" ]; then
+  # Only check labels for issue/PR events
+  if [ "\${{ github.event_name }}" = "issues" ] || [ "\${{ github.event_name }}" = "pull_request" ]; then
+    ISSUE_NUMBER="\${{ github.event.issue.number || github.event.pull_request.number }}"
+    ISSUE_LABELS=$(gh api repos/\${{ github.repository }}/issues/\${ISSUE_NUMBER} --jq '.labels[].name' | jq -R . | jq -s .)
+    
+    LABELS_MATCH=false
+    for label in $(echo "\${TRIGGER_LABELS}" | jq -r '.[]'); do
+      if echo "\${ISSUE_LABELS}" | jq -e --arg label "\${label}" 'index(\$label)' > /dev/null; then
+        LABELS_MATCH=true
+        break
+      fi
+    done
+    
+    if [ "\${LABELS_MATCH}" = "true" ]; then
+      echo "✅ Required trigger label found"
+    else
+      echo "❌ None of the required trigger labels found: $(echo "\${TRIGGER_LABELS}" | jq -r 'join(", ")')"
+      VALIDATION_ERRORS="\${VALIDATION_ERRORS}Missing required label. "
+      VALIDATION_STATUS="failed"
     fi
-  done
+  fi
+fi
 
-  if [ "\${LABEL_FOUND}" = "false" ]; then
-    echo "::notice::Required label not found. Need one of: \${REQUIRED_LABELS}"
-    # Track permission issue
-    jq '. += [{
-      "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'",
-      "issue_type": "validation_error",
-      "severity": "error",
-      "message": "Required label not found",
-      "context": {"required_labels": "'\${REQUIRED_LABELS}'", "current_labels": "'\${CURRENT_LABELS}'"}
-    }]' /tmp/audit/permission-issues.json > /tmp/audit/permission-issues.tmp
-    mv /tmp/audit/permission-issues.tmp /tmp/audit/permission-issues.json
-    echo "validation-failed=true" >> $GITHUB_OUTPUT
-    exit 1
+# Check 4: Rate limiting
+RATE_LIMIT_MINUTES=${rateLimitMinutes}
+LAST_RUN=$(gh api repos/\${{ github.repository }}/actions/workflows/$(basename \${{ github.workflow_ref }}) --jq '.path' 2>/dev/null | xargs -I {} gh api repos/\${{ github.repository }}/actions/workflows/{}/runs --jq '.workflow_runs[0].created_at' 2>/dev/null || echo "")
+
+if [ -n "\${LAST_RUN}" ]; then
+  LAST_RUN_EPOCH=$(date -d "\${LAST_RUN}" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%SZ" "\${LAST_RUN}" +%s 2>/dev/null || echo "0")
+  NOW_EPOCH=$(date +%s)
+  MINUTES_SINCE_LAST_RUN=$(( (NOW_EPOCH - LAST_RUN_EPOCH) / 60 ))
+  
+  if [ "\${MINUTES_SINCE_LAST_RUN}" -lt "\${RATE_LIMIT_MINUTES}" ]; then
+    echo "❌ Rate limit: Last run was \${MINUTES_SINCE_LAST_RUN} minutes ago (minimum: \${RATE_LIMIT_MINUTES} minutes)"
+    VALIDATION_ERRORS="\${VALIDATION_ERRORS}Rate limit exceeded. "
+    VALIDATION_STATUS="failed"
+  else
+    echo "✅ Rate limit check passed (last run: \${MINUTES_SINCE_LAST_RUN} minutes ago)"
   fi
 else
-  echo "::warning::No issue or PR number found, skipping label check"
+  echo "✅ Rate limit check passed (first run)"
 fi
 
-# Mark labels check as passed
-jq '.labels_check = true' /tmp/audit/validation-status.json > /tmp/audit/validation-status.tmp
-mv /tmp/audit/validation-status.tmp /tmp/audit/validation-status.json`,
-      });
-    }
-
-    steps.push({
-      name: 'Check rate limit',
-      id: 'check-rate-limit',
-      env: {
-        GITHUB_TOKEN: '${{ steps.app-token.outputs.token }}',
-      },
-      run: `RATE_LIMIT_MINUTES=${rateLimitMinutes}
-
-# Get recent workflow runs for this workflow
-# Note: Using repo-level runs endpoint and filtering by workflow name to avoid URL encoding issues
-RECENT_RUNS=$(gh api "repos/\${{ github.repository }}/actions/runs" \\
-  --jq "[.workflow_runs[] | select(.name == \\"\${{ github.workflow }}\\" and .status == \\"completed\\" and .conclusion == \\"success\\")] | .[0:5] | .[].created_at" 2>/dev/null || echo "")
-
-if [ -n "\${RECENT_RUNS}" ]; then
-  CURRENT_TIME=$(date +%s)
-
-  for run_time in \${RECENT_RUNS}; do
-    RUN_TIMESTAMP=$(date -d "\${run_time}" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%SZ" "\${run_time}" +%s 2>/dev/null || echo "0")
-    TIME_DIFF=$(( (CURRENT_TIME - RUN_TIMESTAMP) / 60 ))
-
-    if [ "\${TIME_DIFF}" -lt "\${RATE_LIMIT_MINUTES}" ]; then
-      echo "::warning::Rate limit: Agent ran \${TIME_DIFF} minutes ago. Minimum interval is \${RATE_LIMIT_MINUTES} minutes."
-      # Track rate limit issue
-      jq '. += [{
-        "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'",
-        "issue_type": "rate_limit",
-        "severity": "warning",
-        "message": "Rate limit exceeded",
-        "context": {"time_since_last_run": "'\${TIME_DIFF}'", "minimum_interval": "'\${RATE_LIMIT_MINUTES}'"}
-      }]' /tmp/audit/permission-issues.json > /tmp/audit/permission-issues.tmp
-      mv /tmp/audit/permission-issues.tmp /tmp/audit/permission-issues.json
-      echo "validation-failed=true" >> $GITHUB_OUTPUT
-      exit 1
-    fi
-  done
+# Set outputs
+if [ "\${VALIDATION_STATUS}" = "success" ]; then
+  echo "should-run=true" >> \$GITHUB_OUTPUT
+else
+  echo "should-run=false" >> \$GITHUB_OUTPUT
 fi
-echo "✓ Rate limit check passed"
 
-# Mark rate limit check as passed
-jq '.rate_limit_check = true' /tmp/audit/validation-status.json > /tmp/audit/validation-status.tmp
-mv /tmp/audit/validation-status.tmp /tmp/audit/validation-status.json`,
-    });
+echo "status=\${VALIDATION_STATUS}" >> \$GITHUB_OUTPUT
+echo "errors=\${VALIDATION_ERRORS}" >> \$GITHUB_OUTPUT
 
-    steps.push({
-      name: 'Set output',
-      id: 'set-output',
-      run: `echo "should-run=true" >> $GITHUB_OUTPUT
-echo "✓ All validation checks passed"`,
-    });
-
-    steps.push({
-      name: 'Upload validation audit data',
-      if: 'always()',
-      uses: 'actions/upload-artifact@v4',
-      with: {
-        name: 'validation-audit',
-        path: '/tmp/audit/',
-        'if-no-files-found': 'ignore',
-      },
-    });
-
-    return steps;
-  }
-
-  private generateClaudeAgentSteps(agent: AgentDefinition): WorkflowStep[] {
-    const instructions = agent.markdown.replace(/`/g, '\\`').replace(/\$/g, '\\$');
-
-    const steps: WorkflowStep[] = [
-      {
-        name: 'Checkout repository',
-        uses: 'actions/checkout@v4',
-      },
-      this.generateTokenGenerationStep(),
-      {
-        name: 'Setup Bun',
-        uses: 'oven-sh/setup-bun@v2',
-        with: {
-          'bun-version': 'latest',
-        },
-      },
-      {
-        name: 'Install Claude Code CLI',
-        run: 'bunx --bun @anthropic-ai/claude-code --version',
+echo ""
+echo "=== Validation Summary ==="
+echo "Status: \${VALIDATION_STATUS}"
+if [ -n "\${VALIDATION_ERRORS}" ]; then
+  echo "Errors: \${VALIDATION_ERRORS}"
+fi
+`,
       },
     ];
+  }
 
-    // Create outputs directory if outputs are configured
-    if (agent.outputs && Object.keys(agent.outputs).length > 0) {
-      steps.push({
-        name: 'Create outputs directory',
-        run: 'mkdir -p /tmp/outputs /tmp/validation-errors',
-      });
+  /**
+   * Generates the input collection job
+   */
+  private generateCollectInputsJob(agent: AgentDefinition): any {
+    if (!agent.inputs) {
+      throw new Error('Cannot generate collect-inputs job without inputs configuration');
     }
 
-    // Prepare initial context file
+    const collector = new InputCollector(agent.inputs, '${{ github.repository }}');
+
+    return {
+      'runs-on': 'ubuntu-latest',
+      needs: ['pre-flight'],
+      if: "needs.pre-flight.outputs.should-run == 'true'",
+      outputs: {
+        'has-inputs': '${{ steps.collect.outputs.has-inputs }}',
+        'inputs-data': '${{ steps.collect.outputs.inputs-data }}',
+      },
+      steps: [
+        this.generateTokenGenerationStep(),
+        {
+          name: 'Collect repository data',
+          id: 'collect',
+          env: {
+            GITHUB_TOKEN:
+              '${{ steps.generate-token.outputs.token || secrets.GITHUB_TOKEN || github.token }}',
+          },
+          run: collector.generateCollectionScript(),
+        },
+      ],
+    };
+  }
+
+  /**
+   * Generates the main Claude agent execution job
+   */
+  private generateClaudeAgentJob(agent: AgentDefinition): any {
+    const needs = ['pre-flight'];
+    let ifCondition = "needs.pre-flight.outputs.should-run == 'true'";
+
+    // Add collect-inputs dependency if inputs are configured
+    if (agent.inputs) {
+      needs.push('collect-inputs');
+      ifCondition += " && needs.collect-inputs.outputs.has-inputs == 'true'";
+    }
+
+    return {
+      'runs-on': 'ubuntu-latest',
+      needs,
+      if: ifCondition,
+      steps: this.generateClaudeAgentSteps(agent),
+    };
+  }
+
+  /**
+   * Generates steps for Claude agent execution
+   */
+  private generateClaudeAgentSteps(agent: AgentDefinition): WorkflowStep[] {
+    const steps: WorkflowStep[] = [];
+
+    // Add GitHub App token generation
+    steps.push(this.generateTokenGenerationStep());
+
+    // Checkout repository
+    steps.push({
+      name: 'Checkout repository',
+      uses: 'actions/checkout@v4',
+      with: {
+        token:
+          '${{ steps.generate-token.outputs.token || secrets.GITHUB_TOKEN || github.token }}',
+      },
+    });
+
+    // Setup Bun
+    steps.push({
+      name: 'Setup Bun',
+      uses: 'oven-sh/setup-bun@v2',
+    });
+
+    // Prepare context file
     steps.push({
       name: 'Prepare context file',
-      id: 'prepare',
-      run:
-        "cat > /tmp/context.txt << 'CONTEXT_EOF'\n" +
-        'GitHub Event: $' +
-        '{{ github.event_name }}\n' +
-        'Repository: $' +
-        '{{ github.repository }}\n' +
-        'CONTEXT_EOF',
+      env: {
+        GITHUB_TOKEN:
+          '${{ steps.generate-token.outputs.token || secrets.GITHUB_TOKEN || github.token }}',
+      },
+      run: this.generateContextPreparationScript(agent),
     });
 
-    // Add collected inputs to context if available
-    if (agent.inputs) {
-      steps.push({
-        name: 'Add collected inputs to context',
-        if: "needs.collect-inputs.outputs.has-inputs == 'true'",
-        run:
-          "cat >> /tmp/context.txt << 'INPUTS_EOF'\n" +
-          '\n' +
-          '## Collected Inputs\n' +
-          '\n' +
-          'The following data has been collected from the repository:\n' +
-          '\n' +
-          '$' +
-          '{{ needs.collect-inputs.outputs.inputs-data }}\n' +
-          'INPUTS_EOF',
-      });
-    }
-
-    // Add issue context if applicable
+    // Create skills file for Claude
     steps.push({
-      name: 'Add issue context',
-      if: 'github.event.issue.number',
-      run:
-        "cat >> /tmp/context.txt << 'ISSUE_EOF'\n" +
-        'Issue #${{ github.event.issue.number }}: ${{ github.event.issue.title }}\n' +
-        'Author: @${{ github.event.issue.user.login }}\n' +
-        'Body:\n' +
-        '${{ github.event.issue.body }}\n' +
-        'ISSUE_EOF',
+      name: 'Create skills documentation',
+      run: this.generateSkillsDocumentation(agent),
     });
 
-    // Add PR context if applicable
+    // Run Claude
     steps.push({
-      name: 'Add PR context',
-      if: 'github.event.pull_request.number',
-      run:
-        "cat >> /tmp/context.txt << 'PR_EOF'\n" +
-        'PR #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}\n' +
-        'Author: @${{ github.event.pull_request.user.login }}\n' +
-        'Body:\n' +
-        '${{ github.event.pull_request.body }}\n' +
-        'PR_EOF',
+      name: 'Run Claude agent',
+      id: 'claude',
+      run: this.generateClaudeExecutionScript(agent),
     });
 
-    // Add dynamic context for outputs if configured
-    if (agent.outputs && Object.keys(agent.outputs).length > 0) {
-      const runtime = this.createRuntimeContext(agent);
-
-      for (const [outputType] of Object.entries(agent.outputs)) {
-        try {
-          const handler = getOutputHandler(outputType as Output);
-          const contextScript = handler.getContextScript(runtime);
-
-          if (contextScript) {
-            steps.push({
-              name: `Fetch ${outputType} context`,
-              env: {
-                GITHUB_TOKEN: '${{ steps.app-token.outputs.token }}',
-              },
-              run: contextScript.trim(),
-            });
-          }
-        } catch {
-          // Handler not found - skip
-          console.warn(`Warning: No handler found for output type: ${outputType}`);
-        }
-      }
-    }
-
-    // Create Claude skills file if outputs are configured
-    // Note: We create this in .claude/ in the repo so Claude can access both the skills AND the actual codebase
-    if (agent.outputs && Object.keys(agent.outputs).length > 0) {
-      const skillsContent = this.generateSkillsFile(agent);
-      const escapedSkills = skillsContent.replace(/`/g, '\\`').replace(/\$/g, '\\$');
-
-      steps.push({
-        name: 'Create Claude skills file',
-        run:
-          "mkdir -p .claude && cat > .claude/CLAUDE.md << 'SKILLS_EOF'\n" +
-          escapedSkills +
-          '\n' +
-          'SKILLS_EOF',
-      });
-    }
-
-    // Add instructions to context file
-    steps.push({
-      name: 'Add agent instructions',
-      run:
-        "cat >> /tmp/context.txt << 'INSTRUCTIONS_EOF'\n" +
-        '\n' +
-        '---\n' +
-        '\n' +
-        instructions +
-        '\n' +
-        'INSTRUCTIONS_EOF',
-    });
-
-    // Run Claude with the prepared context
-    const allowedTools =
-      agent.outputs && Object.keys(agent.outputs).length > 0
-        ? 'Write(/tmp/outputs/*),Read,Glob,Grep'
-        : 'Read,Glob,Grep';
-
-    // Claude runs in $GITHUB_WORKSPACE (the repo checkout) with either:
-    // - bypassPermissions if we have outputs (skills file is in .claude/CLAUDE.md)
-    // - normal mode otherwise
-    const claudeCommand =
-      agent.outputs && Object.keys(agent.outputs).length > 0
-        ? `bunx --bun @anthropic-ai/claude-code -p "$(cat /tmp/context.txt)" --allowedTools "${allowedTools}" --permission-mode bypassPermissions --output-format json > /tmp/claude-output.json`
-        : `bunx --bun @anthropic-ai/claude-code -p "$(cat /tmp/context.txt)" --allowedTools "${allowedTools}" --output-format json > /tmp/claude-output.json`;
-
-    steps.push({
-      name: 'Run Claude Agent',
-      id: 'run-claude',
-      env: this.generateEnvironment(agent),
-      run: claudeCommand,
-    });
-
-    // Extract and display Claude execution summary
+    // Extract and log metrics
     steps.push({
       name: 'Extract execution metrics',
-      id: 'extract-metrics',
       if: 'always()',
-      run: `
-if [ -f /tmp/claude-output.json ]; then
-  echo "=== Claude Execution Summary ==="
+      run: `#!/bin/bash
+set +e  # Don't exit on error
 
-  # Extract metrics using jq
-  COST=$(jq -r '.total_cost_usd // "N/A"' /tmp/claude-output.json)
-  TURNS=$(jq -r '.num_turns // "N/A"' /tmp/claude-output.json)
-  DURATION=$(jq -r '.duration_ms // "N/A"' /tmp/claude-output.json)
-  API_DURATION=$(jq -r '.duration_api_ms // "N/A"' /tmp/claude-output.json)
-  IS_ERROR=$(jq -r '.is_error // false' /tmp/claude-output.json)
-  SESSION_ID=$(jq -r '.session_id // "N/A"' /tmp/claude-output.json)
-
-  echo "💰 Cost: \\$\${COST}"
-  echo "🔄 Turns: \${TURNS}"
-  echo "⏱️  Duration: \${DURATION}ms (API: \${API_DURATION}ms)"
-  echo "🆔 Session: \${SESSION_ID}"
-  echo "❌ Error: \${IS_ERROR}"
-
-  # Save metrics for audit report
+if [ -f /tmp/claude-output.txt ]; then
+  echo "=== Claude Execution Metrics ==="
+  
+  # Extract metrics using regex patterns
+  TOTAL_COST=$(grep -oP 'Total cost: \\$\\K[0-9.]+' /tmp/claude-output.txt || echo "0")
+  IS_ERROR=$(grep -q "is_error=true" /tmp/claude-output.txt && echo "true" || echo "false")
+  DURATION=$(grep -oP 'duration=\\K[0-9]+' /tmp/claude-output.txt || echo "0")
+  API_DURATION=$(grep -oP 'duration_api=\\K[0-9]+' /tmp/claude-output.txt || echo "0")
+  NUM_TURNS=$(grep -oP 'num_turns=\\K[0-9]+' /tmp/claude-output.txt || echo "0")
+  SESSION_ID=$(grep -oP 'session_id=\\K[a-zA-Z0-9-]+' /tmp/claude-output.txt || echo "unknown")
+  
+  echo "Total Cost: \\$\${TOTAL_COST}"
+  echo "Error: \${IS_ERROR}"
+  echo "Duration: \${DURATION}ms"
+  echo "API Duration: \${API_DURATION}ms"
+  echo "Number of Turns: \${NUM_TURNS}"
+  echo "Session ID: \${SESSION_ID}"
+  
+  # Save metrics for audit
   mkdir -p /tmp/audit
-  jq '{
-    total_cost_usd: .total_cost_usd,
-    num_turns: .num_turns,
-    duration_ms: .duration_ms,
-    duration_api_ms: .duration_api_ms,
-    is_error: .is_error,
-    session_id: .session_id
-  }' /tmp/claude-output.json > /tmp/audit/metrics.json
-
-  # Display result for debugging
-  echo ""
-  echo "=== Claude Response ==="
-  jq -r '.result' /tmp/claude-output.json || echo "No result available"
+  cat > /tmp/audit/metrics.json << EOF
+{
+  "total_cost_usd": \${TOTAL_COST},
+  "is_error": \${IS_ERROR},
+  "duration_ms": \${DURATION},
+  "duration_api_ms": \${API_DURATION},
+  "num_turns": \${NUM_TURNS},
+  "session_id": "\${SESSION_ID}"
+}
+EOF
 else
-  echo "::error::Claude output file not found"
-  echo '{"is_error": true}' > /tmp/audit/metrics.json
+  echo "No Claude output file found"
 fi
 `,
     });
 
-    // Upload audit metrics artifact
-    steps.push({
-      name: 'Upload audit metrics',
-      if: 'always()',
-      uses: 'actions/upload-artifact@v4',
-      with: {
-        name: 'audit-metrics',
-        path: '/tmp/audit/',
-        'if-no-files-found': 'ignore',
-      },
-    });
-
-    // Upload outputs artifact if outputs are configured
+    // Upload outputs artifact
     if (agent.outputs && Object.keys(agent.outputs).length > 0) {
       steps.push({
-        name: 'Upload outputs artifact',
+        name: 'Upload outputs',
         if: 'always()',
         uses: 'actions/upload-artifact@v4',
         with: {
-          name: 'agent-outputs',
+          name: 'claude-outputs',
           path: '/tmp/outputs/',
+          'if-no-files-found': 'ignore',
+        },
+      });
+
+      steps.push({
+        name: 'Upload audit data',
+        if: 'always()',
+        uses: 'actions/upload-artifact@v4',
+        with: {
+          name: 'audit-data',
+          path: '/tmp/audit/',
           'if-no-files-found': 'ignore',
         },
       });
@@ -618,79 +509,188 @@ fi
     return steps;
   }
 
-  private createRuntimeContext(agent: AgentDefinition): RuntimeContext {
-    return {
-      repository: '${{ github.repository }}',
-      issueNumber: '${{ github.event.issue.number }}',
-      prNumber: '${{ github.event.pull_request.number }}',
-      allowedPaths: agent.allowed_paths,
-    };
-  }
+  /**
+   * Generates script to prepare context file for Claude
+   */
+  private generateContextPreparationScript(agent: AgentDefinition): string {
+    let script = `#!/bin/bash
+set -e
 
-  private generateSkillsFile(agent: AgentDefinition): string {
-    if (!agent.outputs || Object.keys(agent.outputs).length === 0) {
-      return '';
+mkdir -p /tmp/outputs
+mkdir -p /tmp/audit
+
+# Start context file
+cat > /tmp/context.txt << 'CONTEXT_EOF'
+GitHub Event: \${{ github.event_name }}
+Repository: \${{ github.repository }}
+`;
+
+    // Add event-specific context
+    script += `
+if [ "\${{ github.event_name }}" = "issues" ]; then
+  cat >> /tmp/context.txt << 'ISSUE_EOF'
+Issue Number: \${{ github.event.issue.number }}
+Issue Title: \${{ github.event.issue.title }}
+Issue Author: \${{ github.event.issue.user.login }}
+Issue Body:
+\${{ github.event.issue.body }}
+ISSUE_EOF
+fi
+
+if [ "\${{ github.event_name }}" = "pull_request" ]; then
+  cat >> /tmp/context.txt << 'PR_EOF'
+Pull Request Number: \${{ github.event.pull_request.number }}
+PR Title: \${{ github.event.pull_request.title }}
+PR Author: \${{ github.event.pull_request.user.login }}
+PR Body:
+\${{ github.event.pull_request.body }}
+PR_EOF
+fi
+
+if [ "\${{ github.event_name }}" = "discussion" ]; then
+  cat >> /tmp/context.txt << 'DISCUSSION_EOF'
+Discussion Number: \${{ github.event.discussion.number }}
+Discussion Title: \${{ github.event.discussion.title }}
+Discussion Author: \${{ github.event.discussion.user.login }}
+Discussion Body:
+\${{ github.event.discussion.body }}
+DISCUSSION_EOF
+fi
+`;
+
+    // Add collected inputs if configured
+    if (agent.inputs) {
+      script += `
+# Add collected inputs
+if [ "\${{ needs.collect-inputs.outputs.has-inputs }}" = "true" ]; then
+  cat >> /tmp/context.txt << 'INPUTS_EOF'
+
+---
+
+# Collected Repository Data
+
+\${{ needs.collect-inputs.outputs.inputs-data }}
+INPUTS_EOF
+fi
+`;
     }
 
-    const skills: string[] = [
-      '# Agent Output Skills',
-      '',
-      'This file documents how to create outputs for this agent.',
-      '',
-    ];
+    // Fetch dynamic context from output handlers
+    if (agent.outputs) {
+      const runtime: RuntimeContext = {
+        repository: '${{ github.repository }}',
+        issueNumber:
+          '${{ github.event.issue.number || github.event.pull_request.number || "" }}',
+        prNumber: '${{ github.event.pull_request.number || "" }}',
+        allowedPaths: agent.allowed_paths,
+      };
 
-    for (const [outputType, config] of Object.entries(agent.outputs)) {
-      try {
-        const handler = getOutputHandler(outputType as Output);
-        const outputConfig = typeof config === 'boolean' ? {} : config;
-        const skillMarkdown = handler.generateSkill(outputConfig);
-        skills.push(skillMarkdown);
-        skills.push('');
-      } catch {
-        // Handler not found - skip
-        console.warn(`Warning: No handler found for output type: ${outputType}`);
+      for (const [outputType, config] of Object.entries(agent.outputs)) {
+        try {
+          const handler = getOutputHandler(outputType as Output);
+          const outputConfig = typeof config === 'boolean' ? {} : (config as OutputConfig);
+          const contextScript = handler.getContextScript(runtime);
+
+          if (contextScript) {
+            script += `\n${contextScript}\n`;
+          }
+        } catch (error) {
+          // Handler not found - skip
+          logger.warn(`Warning: No handler found for output type: ${outputType}`);
+        }
       }
     }
 
-    return skills.join('\n');
+    script += `\n# Close context file
+cat >> /tmp/context.txt << 'CONTEXT_EOF'
+CONTEXT_EOF
+`;
+
+    return script;
   }
 
-  private generateCollectInputsJob(agent: AgentDefinition): any {
-    if (!agent.inputs) {
-      throw new Error('generateCollectInputsJob called without inputs configuration');
+  /**
+   * Generates skills documentation for Claude
+   */
+  private generateSkillsDocumentation(agent: AgentDefinition): string {
+    const skillsGen = new SkillsGenerator();
+    const skillsContent = skillsGen.generateSkillsFile(agent);
+
+    return `mkdir -p .claude
+
+cat > .claude/CLAUDE.md << 'SKILLS_EOF'
+${skillsContent}
+SKILLS_EOF
+`;
+  }
+
+  /**
+   * Generates Claude execution script
+   */
+  private generateClaudeExecutionScript(agent: AgentDefinition): string {
+    const model = agent.claude?.model || 'claude-3-5-sonnet-20241022';
+    const maxTokens = agent.claude?.max_tokens || 4096;
+    const temperature = agent.claude?.temperature ?? 0.7;
+
+    // Determine authentication method
+    const authEnv = `\${ANTHROPIC_API_KEY:-\${CLAUDE_CODE_OAUTH_TOKEN}}`;
+
+    // Build tool permissions flags
+    let toolFlags = '';
+
+    if (agent.outputs) {
+      // Agent has specific outputs configured - use safe mode with Write permission
+      toolFlags = '--safe-mode --allow-tools Write';
+    } else {
+      // No outputs - use safe mode only (read-only)
+      toolFlags = '--safe-mode';
     }
 
-    const collectionScript = inputCollector.generateCollectionScript(agent.inputs);
+    return `#!/bin/bash
+set -e
 
-    return {
-      'runs-on': 'ubuntu-latest',
-      needs: 'pre-flight',
-      if: "needs.pre-flight.outputs.should-run == 'true'",
-      outputs: {
-        'has-inputs': '$' + '{{ steps.collect.outputs.has-inputs }}',
-        'inputs-data': '$' + '{{ steps.collect.outputs.inputs-data }}',
-      },
-      steps: [
-        this.generateTokenGenerationStep(),
-        {
-          name: 'Collect repository data',
-          id: 'collect',
-          env: {
-            GITHUB_TOKEN: '$' + '{{ steps.app-token.outputs.token }}',
-          },
-          run: collectionScript,
-        },
-      ],
-    };
+# Install Claude Code CLI
+bunx claude-code --version || bunx claude-code@latest --version
+
+# Set authentication
+export ANTHROPIC_API_KEY="\${{ secrets.ANTHROPIC_API_KEY }}"
+export CLAUDE_CODE_OAUTH_TOKEN="\${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}"
+
+# Prepare prompt
+CONTEXT=$(cat /tmp/context.txt)
+INSTRUCTIONS=$(cat << 'INSTRUCTIONS_EOF'
+${agent.markdown}
+INSTRUCTIONS_EOF
+)
+
+PROMPT="\${CONTEXT}\n\n---\n\n\${INSTRUCTIONS}"
+
+# Run Claude with safe mode and specific tool permissions
+echo "\${PROMPT}" | bunx claude-code \${PROMPT} \\
+  --model ${model} \\
+  --max-tokens ${maxTokens} \\
+  --temperature ${temperature} \\
+  ${toolFlags} \\
+  2>&1 | tee /tmp/claude-output.txt
+
+echo "Claude agent execution completed"
+`;
   }
 
+  /**
+   * Generates the output execution job
+   */
   private generateExecuteOutputsJob(agent: AgentDefinition): any {
-    const outputTypes = Object.keys(agent.outputs || {});
+    if (!agent.outputs || Object.keys(agent.outputs).length === 0) {
+      throw new Error('Cannot generate execute-outputs job without outputs configuration');
+    }
+
+    const outputTypes = Object.keys(agent.outputs);
 
     return {
       'runs-on': 'ubuntu-latest',
-      needs: 'claude-agent',
-      if: "success() && needs.claude-agent.result == 'success'",
+      needs: ['claude-agent'],
+      if: 'always()',
       strategy: {
         matrix: {
           'output-type': outputTypes,
@@ -698,39 +698,30 @@ fi
         'fail-fast': false,
       },
       steps: [
-        {
-          name: 'Checkout repository',
-          uses: 'actions/checkout@v4',
-        },
         this.generateTokenGenerationStep(),
         {
           name: 'Download outputs artifact',
           uses: 'actions/download-artifact@v4',
           with: {
-            name: 'agent-outputs',
-            path: '/tmp/outputs',
+            name: 'claude-outputs',
+            path: '/tmp/outputs/',
           },
-          'continue-on-error': true,
+          continue: { 'on-error': true },
         },
         {
-          name: 'Create validation errors directory',
-          run: 'mkdir -p /tmp/validation-errors',
-        },
-        {
-          name: 'Validate and execute ${{ matrix.output-type }}',
+          name: 'Execute output: ${{ matrix.output-type }}',
           env: {
-            GITHUB_TOKEN: '${{ steps.app-token.outputs.token }}',
-            GIT_USER: '${{ steps.app-token.outputs.git-user }}',
-            GIT_EMAIL: '${{ steps.app-token.outputs.git-email }}',
+            GITHUB_TOKEN:
+              '${{ steps.generate-token.outputs.token || secrets.GITHUB_TOKEN || github.token }}',
           },
-          run: this.generateMatrixValidationScript(agent),
+          run: this.generateOutputExecutionScript(agent),
         },
         {
-          name: 'Upload validation results',
+          name: 'Upload validation errors',
           if: 'always()',
           uses: 'actions/upload-artifact@v4',
           with: {
-            name: 'validation-results-${{ matrix.output-type }}',
+            name: 'validation-errors-${{ matrix.output-type }}',
             path: '/tmp/validation-errors/',
             'if-no-files-found': 'ignore',
           },
@@ -739,85 +730,110 @@ fi
     };
   }
 
-  private generateMatrixValidationScript(agent: AgentDefinition): string {
-    const runtime = this.createRuntimeContext(agent);
-    const scripts: string[] = [];
+  /**
+   * Generates script to execute a specific output type
+   */
+  private generateOutputExecutionScript(agent: AgentDefinition): string {
+    const runtime: RuntimeContext = {
+      repository: '${{ github.repository }}',
+      issueNumber: '${{ github.event.issue.number || github.event.pull_request.number || "" }}',
+      prNumber: '${{ github.event.pull_request.number || "" }}',
+      allowedPaths: agent.allowed_paths,
+    };
 
-    // Add validation script for each output type
-    for (const [outputType, config] of Object.entries(agent.outputs || {})) {
-      try {
-        const handler = getOutputHandler(outputType as Output);
-        const outputConfig = typeof config === 'boolean' ? {} : config;
-        const validationScript = handler.generateValidationScript(outputConfig, runtime);
+    let script = `#!/bin/bash
+set +e  # Don't exit on error to allow error collection
 
-        // Wrap each validation script in a conditional that checks the matrix variable
-        scripts.push(`
-if [ "\${{ matrix.output-type }}" = "${outputType}" ]; then
+mkdir -p /tmp/validation-errors
+
+OUTPUT_TYPE="\${{ matrix.output-type }}"
+
+echo "Executing output: \${OUTPUT_TYPE}"
+
+`;
+
+    // Generate validation script for each output type
+    if (agent.outputs) {
+      for (const [outputType, config] of Object.entries(agent.outputs)) {
+        try {
+          const handler = getOutputHandler(outputType as Output);
+          const outputConfig = typeof config === 'boolean' ? {} : (config as OutputConfig);
+          const validationScript = handler.generateValidationScript(outputConfig, runtime);
+
+          script += `if [ "\${OUTPUT_TYPE}" = "${outputType}" ]; then
 ${validationScript}
 fi
-`);
-      } catch {
-        // Handler not found - skip
-        console.warn(`Warning: No handler found for output type: ${outputType}`);
+
+`;
+        } catch (error) {
+          // Handler not found - skip
+          logger.warn(`Warning: No handler found for output type: ${outputType}`);
+        }
       }
     }
 
-    return scripts.join('\n');
+    script += `echo "Output execution completed for \${OUTPUT_TYPE}"
+`;
+
+    return script;
   }
 
-  private generateReportResultsJob(agent: AgentDefinition): any {
-    const runtime = this.createRuntimeContext(agent);
-
+  /**
+   * Generates the validation error reporting job
+   */
+  private generateReportResultsJob(_agent: AgentDefinition): any {
     return {
       'runs-on': 'ubuntu-latest',
-      needs: 'execute-outputs',
-      if: 'always()',
+      needs: ['execute-outputs'],
+      if: 'always() && needs.execute-outputs.result != \'success\'',
       steps: [
-        {
-          name: 'Download all validation results',
-          uses: 'actions/download-artifact@v4',
-          with: {
-            pattern: 'validation-results-*',
-            path: '/tmp/all-validation-errors',
-            'merge-multiple': true,
-          },
-          'continue-on-error': true,
-        },
         this.generateTokenGenerationStep(),
         {
-          name: 'Report validation errors',
-          env: {
-            GITHUB_TOKEN: '${{ steps.app-token.outputs.token }}',
+          name: 'Download all validation errors',
+          uses: 'actions/download-artifact@v4',
+          with: {
+            pattern: 'validation-errors-*',
+            path: '/tmp/validation-errors/',
+            'merge-multiple': true,
           },
-          run: `
-# Check if there are any validation errors
-if [ -d "/tmp/all-validation-errors" ] && [ "$(ls -A /tmp/all-validation-errors 2>/dev/null)" ]; then
-  echo "⚠️  Some output validations failed"
+          continue: { 'on-error': true },
+        },
+        {
+          name: 'Report validation errors',
+          if: "github.event_name == 'issues' || github.event_name == 'pull_request'",
+          env: {
+            GITHUB_TOKEN:
+              '${{ steps.generate-token.outputs.token || secrets.GITHUB_TOKEN || github.token }}',
+          },
+          run: `#!/bin/bash
+set -e
 
-  # Build error message
-  ERROR_MSG="## ⚠️ Agent Output Validation Errors\\n\\nThe following outputs failed validation:\\n\\n"
+ISSUE_NUMBER="\${{ github.event.issue.number || github.event.pull_request.number }}"
 
-  for error_file in /tmp/all-validation-errors/*; do
-    if [ -f "$error_file" ]; then
-      ERROR_CONTENT=$(cat "$error_file")
-      ERROR_MSG="\${ERROR_MSG}\${ERROR_CONTENT}\\n"
+if [ -z "\${ISSUE_NUMBER}" ]; then
+  echo "No issue or PR number available - skipping error reporting"
+  exit 0
+fi
+
+# Collect all validation errors
+if [ -d /tmp/validation-errors ] && [ -n "$(ls -A /tmp/validation-errors 2>/dev/null)" ]; then
+  ERROR_MESSAGE="## ⚠️ Agent Output Validation Errors\n\nThe following validation errors occurred:\n\n"
+  
+  for error_file in /tmp/validation-errors/*.txt; do
+    if [ -f "\${error_file}" ]; then
+      ERROR_MESSAGE="\${ERROR_MESSAGE}$(cat \${error_file})\n"
     fi
   done
-
-  # Post comment if we have issue/PR number
-  ISSUE_OR_PR_NUMBER="${runtime.issueNumber || runtime.prNumber}"
-  if [ -n "$ISSUE_OR_PR_NUMBER" ]; then
-    echo -e "$ERROR_MSG" | gh api "repos/${runtime.repository}/issues/$ISSUE_OR_PR_NUMBER/comments" \\
-      -X POST \\
-      -f body=@- || echo "Failed to post validation error comment"
-  else
-    echo "No issue or PR number available to post validation errors"
-    echo -e "$ERROR_MSG"
-  fi
-
-  exit 1
+  
+  ERROR_MESSAGE="\${ERROR_MESSAGE}\n---\n\nWorkflow run: [\${{ github.run_id }}](\${{ github.server_url }}/\${{ github.repository }}/actions/runs/\${{ github.run_id }})"
+  
+  # Post comment to issue/PR
+  gh api "repos/\${{ github.repository }}/issues/\${ISSUE_NUMBER}/comments" \\
+    -f body="\${ERROR_MESSAGE}"
+  
+  echo "Posted validation errors to issue/PR #\${ISSUE_NUMBER}"
 else
-  echo "✓ All output validations passed"
+  echo "No validation errors found"
 fi
 `,
         },
@@ -825,472 +841,200 @@ fi
     };
   }
 
+  /**
+   * Generates the audit report job
+   */
   private generateAuditReportJob(agent: AgentDefinition): any {
-    const hasOutputs = agent.outputs && Object.keys(agent.outputs).length > 0;
-    const auditConfig = agent.audit || {};
-    const createIssues = auditConfig.create_issues !== false; // Default true
-    const auditLabels = auditConfig.labels || ['agent-failure'];
-    const auditAssignees = auditConfig.assignees || [];
-
-    const needs = hasOutputs
-      ? ['pre-flight', 'claude-agent', 'execute-outputs']
-      : ['pre-flight', 'claude-agent'];
-
-    const steps: any[] = [
-      {
-        name: 'Download validation audit',
-        uses: 'actions/download-artifact@v4',
-        with: {
-          name: 'validation-audit',
-          path: '/tmp/audit-data/validation',
-        },
-        'continue-on-error': true,
-      },
-      {
-        name: 'Download execution metrics',
-        uses: 'actions/download-artifact@v4',
-        with: {
-          name: 'audit-metrics',
-          path: '/tmp/audit-data/metrics',
-        },
-        'continue-on-error': true,
-      },
-    ];
-
-    if (hasOutputs) {
-      steps.push({
-        name: 'Download output validation results',
-        uses: 'actions/download-artifact@v4',
-        with: {
-          pattern: 'validation-results-*',
-          path: '/tmp/audit-data/outputs',
-          'merge-multiple': true,
-        },
-        'continue-on-error': true,
-      });
-    }
-
-    // Generate the audit report and check for failures
-    steps.push({
-      name: 'Generate audit report and check status',
-      id: 'audit-check',
-      run: `
-# Initialize failure tracking
-HAS_FAILURES="false"
-FAILURE_REASONS=""
-
-# Check job results
-PRE_FLIGHT_RESULT="\${{ needs.pre-flight.result }}"
-CLAUDE_AGENT_RESULT="\${{ needs.claude-agent.result }}"
-${hasOutputs ? 'EXECUTE_OUTPUTS_RESULT="${{ needs.execute-outputs.result }}"' : ''}
-
-if [ "\$PRE_FLIGHT_RESULT" != "success" ]; then
-  HAS_FAILURES="true"
-  FAILURE_REASONS="\${FAILURE_REASONS}Pre-flight validation failed (\$PRE_FLIGHT_RESULT)\\n"
-fi
-
-if [ "\$CLAUDE_AGENT_RESULT" != "success" ] && [ "\$CLAUDE_AGENT_RESULT" != "skipped" ]; then
-  HAS_FAILURES="true"
-  FAILURE_REASONS="\${FAILURE_REASONS}Claude agent execution failed (\$CLAUDE_AGENT_RESULT)\\n"
-fi
-
-${
-  hasOutputs
-    ? `
-if [ "\$EXECUTE_OUTPUTS_RESULT" != "success" ] && [ "\$EXECUTE_OUTPUTS_RESULT" != "skipped" ]; then
-  HAS_FAILURES="true"
-  FAILURE_REASONS="\${FAILURE_REASONS}Output execution failed (\$EXECUTE_OUTPUTS_RESULT)\\n"
-fi
-`
-    : ''
-}
-
-# Check for permission issues
-PERMISSION_ISSUE_COUNT=0
-if [ -f /tmp/audit-data/validation/permission-issues.json ]; then
-  PERMISSION_ISSUE_COUNT=$(jq 'length' /tmp/audit-data/validation/permission-issues.json)
-  if [ "\$PERMISSION_ISSUE_COUNT" -gt 0 ]; then
-    HAS_FAILURES="true"
-    FAILURE_REASONS="\${FAILURE_REASONS}Permission/validation issues detected (\$PERMISSION_ISSUE_COUNT)\\n"
-  fi
-fi
-
-# Check if Claude had an error
-if [ -f /tmp/audit-data/metrics/metrics.json ]; then
-  IS_ERROR=$(jq -r '.is_error // false' /tmp/audit-data/metrics/metrics.json)
-  if [ "\$IS_ERROR" = "true" ]; then
-    HAS_FAILURES="true"
-    FAILURE_REASONS="\${FAILURE_REASONS}Claude execution returned an error\\n"
-  fi
-fi
-
-# Generate the audit report
-mkdir -p /tmp/audit
-cat > /tmp/audit/report.md << 'REPORT_EOF'
-# Agent Execution Audit Report
-
-**Agent:** ${agent.name}
-**Workflow Run:** [\${{ github.run_id }}](\${{ github.server_url }}/\${{ github.repository }}/actions/runs/\${{ github.run_id }})
-**Triggered by:** @\${{ github.actor }}
-**Event:** \${{ github.event_name }}
-**Timestamp:** $(date -u +%Y-%m-%dT%H:%M:%SZ)
-
-REPORT_EOF
-
-# Add job results
-echo "## Job Results" >> /tmp/audit/report.md
-echo "" >> /tmp/audit/report.md
-echo "| Job | Result |" >> /tmp/audit/report.md
-echo "|-----|--------|" >> /tmp/audit/report.md
-echo "| pre-flight | \$([ \\"\$PRE_FLIGHT_RESULT\\" = \\"success\\" ] && echo '✅' || echo '❌') \$PRE_FLIGHT_RESULT |" >> /tmp/audit/report.md
-echo "| claude-agent | \$([ \\"\$CLAUDE_AGENT_RESULT\\" = \\"success\\" ] && echo '✅' || [ \\"\$CLAUDE_AGENT_RESULT\\" = \\"skipped\\" ] && echo '⏭️' || echo '❌') \$CLAUDE_AGENT_RESULT |" >> /tmp/audit/report.md
-${
-  hasOutputs
-    ? `echo "| execute-outputs | \$([ \\"\$EXECUTE_OUTPUTS_RESULT\\" = \\"success\\" ] && echo '✅' || [ \\"\$EXECUTE_OUTPUTS_RESULT\\" = \\"skipped\\" ] && echo '⏭️' || echo '❌') \$EXECUTE_OUTPUTS_RESULT |" >> /tmp/audit/report.md`
-    : ''
-}
-echo "" >> /tmp/audit/report.md
-
-# Add execution metrics if available
-if [ -f /tmp/audit-data/metrics/metrics.json ]; then
-  COST=$(jq -r '.total_cost_usd // "N/A"' /tmp/audit-data/metrics/metrics.json)
-  TURNS=$(jq -r '.num_turns // "N/A"' /tmp/audit-data/metrics/metrics.json)
-  DURATION=$(jq -r '.duration_ms // "N/A"' /tmp/audit-data/metrics/metrics.json)
-  SESSION_ID=$(jq -r '.session_id // "N/A"' /tmp/audit-data/metrics/metrics.json)
-
-  echo "## Execution Metrics" >> /tmp/audit/report.md
-  echo "" >> /tmp/audit/report.md
-  echo "| Metric | Value |" >> /tmp/audit/report.md
-  echo "|--------|-------|" >> /tmp/audit/report.md
-  echo "| Cost | \\$\${COST} |" >> /tmp/audit/report.md
-  echo "| Turns | \${TURNS} |" >> /tmp/audit/report.md
-  echo "| Duration | \${DURATION}ms |" >> /tmp/audit/report.md
-  echo "| Session | \\\`\${SESSION_ID}\\\` |" >> /tmp/audit/report.md
-  echo "" >> /tmp/audit/report.md
-fi
-
-# Add permission issues if any
-if [ "\$PERMISSION_ISSUE_COUNT" -gt 0 ]; then
-  echo "## Permission Issues" >> /tmp/audit/report.md
-  echo "" >> /tmp/audit/report.md
-  jq -r '.[] | "- **[\\(.severity | ascii_upcase)]** \\(.issue_type): \\(.message)"' /tmp/audit-data/validation/permission-issues.json >> /tmp/audit/report.md
-  echo "" >> /tmp/audit/report.md
-fi
-
-# Output status for downstream steps
-echo "has-failures=\$HAS_FAILURES" >> \$GITHUB_OUTPUT
-echo "failure-reasons<<EOF" >> \$GITHUB_OUTPUT
-echo -e "\$FAILURE_REASONS" >> \$GITHUB_OUTPUT
-echo "EOF" >> \$GITHUB_OUTPUT
-
-# Log summary (quiet mode for success)
-if [ "\$HAS_FAILURES" = "true" ]; then
-  echo "::error::Agent execution had failures"
-  echo ""
-  cat /tmp/audit/report.md
-else
-  echo "✅ Agent execution completed successfully"
-  echo "📊 View full audit report in workflow artifacts"
-fi
-`,
-    });
-
-    // Add safe-mode diagnostic agent for failures (if create_issues is enabled)
-    if (createIssues) {
-      steps.push({
-        name: 'Checkout repository for diagnosis',
-        if: "steps.audit-check.outputs.has-failures == 'true'",
-        uses: 'actions/checkout@v4',
-      });
-
-      steps.push({
-        ...this.generateTokenGenerationStep(),
-        if: "steps.audit-check.outputs.has-failures == 'true'",
-      });
-
-      steps.push({
-        name: 'Setup Bun for diagnostic agent',
-        if: "steps.audit-check.outputs.has-failures == 'true'",
-        uses: 'oven-sh/setup-bun@v2',
-        with: {
-          'bun-version': 'latest',
-        },
-      });
-
-      steps.push({
-        name: 'Run safe-mode diagnostic agent',
-        id: 'diagnostic',
-        if: "steps.audit-check.outputs.has-failures == 'true'",
-        env: {
-          ANTHROPIC_API_KEY: '${{ secrets.ANTHROPIC_API_KEY }}',
-          CLAUDE_CODE_OAUTH_TOKEN: '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}',
-        },
-        run: `
-# Prepare diagnostic context
-cat > /tmp/diagnostic-prompt.md << 'DIAG_EOF'
-You are a diagnostic agent analyzing a failed GitHub Actions workflow for the "${agent.name}" agent.
-
-## Your Task
-Analyze the failure data below and provide:
-1. A clear summary of what went wrong
-2. The root cause analysis
-3. Specific remediation steps the user can take to fix the issue
-
-## Failure Information
-\${{ steps.audit-check.outputs.failure-reasons }}
-
-## Audit Report
-$(cat /tmp/audit/report.md)
-
-## Validation Status
-$(cat /tmp/audit-data/validation/validation-status.json 2>/dev/null || echo "Not available")
-
-## Permission Issues
-$(cat /tmp/audit-data/validation/permission-issues.json 2>/dev/null || echo "[]")
-
-## Agent Configuration
-- Agent name: ${agent.name}
-- Triggers: ${JSON.stringify(agent.on)}
-- Permissions: ${JSON.stringify(agent.permissions || {})}
-- Outputs: ${JSON.stringify(Object.keys(agent.outputs || {}))}
-
-## Instructions
-Based on the above information:
-1. Write a concise but complete diagnosis
-2. Include specific file paths, configuration changes, or commands needed to fix the issue
-3. If it's a permissions issue, explain exactly what permission is missing and where to add it
-4. If it's a rate limit issue, explain when the user can retry
-5. Format your response in clean markdown suitable for a GitHub issue
-
-Do NOT use any tools that modify files. You are in read-only diagnostic mode.
-DIAG_EOF
-
-# Run diagnostic agent in safe mode (read-only tools)
-bunx --bun @anthropic-ai/claude-code \\
-  -p "$(cat /tmp/diagnostic-prompt.md)" \\
-  --allowedTools "Read,Glob,Grep" \\
-  --output-format json > /tmp/diagnostic-output.json 2>&1 || true
-
-# Extract the diagnosis
-if [ -f /tmp/diagnostic-output.json ]; then
-  jq -r '.result // "Unable to generate diagnosis"' /tmp/diagnostic-output.json > /tmp/diagnosis.md
-else
-  echo "Diagnostic agent did not produce output. Manual investigation required." > /tmp/diagnosis.md
-fi
-`,
-      });
-
-      // Create GitHub issue with the diagnosis
-      const labelsArg = auditLabels.length > 0 ? `--label "${auditLabels.join(',')}"` : '';
-      const assigneesArg =
-        auditAssignees.length > 0 ? `--assignee "${auditAssignees.join(',')}"` : '';
-
-      steps.push({
-        name: 'Create failure issue',
-        if: "steps.audit-check.outputs.has-failures == 'true'",
-        env: {
-          GITHUB_TOKEN: '${{ steps.app-token.outputs.token }}',
-        },
-        run: `
-# Build issue body
-cat > /tmp/issue-body.md << 'ISSUE_EOF'
-## 🚨 Agent Failure Report
-
-The **${agent.name}** agent encountered failures during execution.
-
-### Workflow Details
-- **Run ID:** [\${{ github.run_id }}](\${{ github.server_url }}/\${{ github.repository }}/actions/runs/\${{ github.run_id }})
-- **Triggered by:** @\${{ github.actor }}
-- **Event:** \${{ github.event_name }}
-- **Time:** $(date -u +%Y-%m-%dT%H:%M:%SZ)
-
-### Failure Summary
-\${{ steps.audit-check.outputs.failure-reasons }}
-
----
-
-## 🔍 Diagnostic Analysis
-
-$(cat /tmp/diagnosis.md)
-
----
-
-## 📊 Full Audit Report
-
-<details>
-<summary>Click to expand audit report</summary>
-
-$(cat /tmp/audit/report.md)
-
-</details>
-
----
-
-*This issue was automatically created by the gh-claude audit system.*
-ISSUE_EOF
-
-# Check if a similar issue already exists (avoid duplicates)
-EXISTING_ISSUE=$(gh issue list --state open --label "${auditLabels[0] || 'agent-failure'}" --search "${agent.name} failure" --json number --jq '.[0].number' 2>/dev/null || echo "")
-
-if [ -n "\$EXISTING_ISSUE" ]; then
-  echo "Adding comment to existing issue #\$EXISTING_ISSUE"
-  gh issue comment "\$EXISTING_ISSUE" --body "$(cat /tmp/issue-body.md)"
-else
-  echo "Creating new failure issue"
-  gh issue create \\
-    --title "🚨 ${agent.name}: Agent Execution Failed" \\
-    --body "$(cat /tmp/issue-body.md)" \\
-    ${labelsArg} ${assigneesArg}
-fi
-`,
-      });
-    }
-
-    // Always upload the audit report artifact
-    steps.push({
-      name: 'Upload audit report',
-      if: 'always()',
-      uses: 'actions/upload-artifact@v4',
-      with: {
-        name: 'audit-report',
-        path: '/tmp/audit/',
-        'if-no-files-found': 'ignore',
-      },
-    });
+    const createIssues = agent.audit?.create_issues ?? true;
+    const auditLabels = agent.audit?.labels || ['automated', 'agent-failure'];
+    const auditAssignees = agent.audit?.assignees || [];
 
     return {
       'runs-on': 'ubuntu-latest',
-      needs,
+      needs: ['pre-flight', 'claude-agent'],
       if: 'always()',
-      steps,
-    };
-  }
-
-  private generateEnvironment(_agent: AgentDefinition): Record<string, string> {
-    return {
-      ANTHROPIC_API_KEY: '${{ secrets.ANTHROPIC_API_KEY }}',
-      CLAUDE_CODE_OAUTH_TOKEN: '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}',
-      GITHUB_TOKEN: '${{ steps.app-token.outputs.token }}',
-      GH_TOKEN: '${{ steps.app-token.outputs.token }}',
+      steps: [
+        this.generateTokenGenerationStep(),
+        {
+          name: 'Download audit data',
+          uses: 'actions/download-artifact@v4',
+          with: {
+            name: 'audit-data',
+            path: '/tmp/audit/',
+          },
+          continue: { 'on-error': true },
+        },
+        {
+          name: 'Download validation errors',
+          uses: 'actions/download-artifact@v4',
+          with: {
+            pattern: 'validation-errors-*',
+            path: '/tmp/validation-errors/',
+            'merge-multiple': true,
+          },
+          continue: { 'on-error': true },
+        },
+        {
+          name: 'Generate audit report',
+          id: 'audit',
+          env: {
+            GITHUB_TOKEN:
+              '${{ steps.generate-token.outputs.token || secrets.GITHUB_TOKEN || github.token }}',
+          },
+          run: this.generateAuditReportScript(agent),
+        },
+        {
+          name: 'Create failure issue',
+          if: `steps.audit.outputs.status == 'failed' && ${createIssues ? 'true' : 'false'}`,
+          env: {
+            GITHUB_TOKEN:
+              '${{ steps.generate-token.outputs.token || secrets.GITHUB_TOKEN || github.token }}',
+          },
+          run: this.generateFailureIssueScript(auditLabels, auditAssignees),
+        },
+      ],
     };
   }
 
   /**
-   * Generates a step that creates a GitHub App token if GH_APP_ID and GH_APP_PRIVATE_KEY
-   * secrets are configured. Falls back to GITHUB_TOKEN if not configured.
-   *
-   * Outputs:
-   * - token: The GitHub token to use (app token or GITHUB_TOKEN)
-   * - git-user: The git user.name to use (app name[bot] or github-actions[bot])
-   * - git-email: The git user.email to use
+   * Generates audit report script
    */
-  private generateTokenGenerationStep(): WorkflowStep {
-    return {
-      name: 'Generate GitHub token',
-      id: 'app-token',
-      env: {
-        GH_APP_ID: '${{ secrets.GH_APP_ID }}',
-        GH_APP_PRIVATE_KEY: '${{ secrets.GH_APP_PRIVATE_KEY }}',
-        FALLBACK_TOKEN: '${{ secrets.GITHUB_TOKEN }}',
-      },
-      run: `# Check if GitHub App is configured
-if [ -z "$GH_APP_ID" ] || [ -z "$GH_APP_PRIVATE_KEY" ]; then
-  echo "No GitHub App configured, using default GITHUB_TOKEN"
-  echo "token=$FALLBACK_TOKEN" >> $GITHUB_OUTPUT
-  echo "git-user=github-actions[bot]" >> $GITHUB_OUTPUT
-  echo "git-email=github-actions[bot]@users.noreply.github.com" >> $GITHUB_OUTPUT
-  exit 0
+  private generateAuditReportScript(_agent: AgentDefinition): string {
+    return `#!/bin/bash
+set +e  # Don't exit on error
+
+echo "=== Agent Execution Audit Report ==="
+echo "Agent: ${{ github.workflow }}"
+echo "Run ID: ${{ github.run_id }}"
+echo "Triggered by: ${{ github.actor }}"
+echo "Event: ${{ github.event_name }}"
+echo "Started: ${{ github.event.created_at }}"
+echo ""
+
+# Load metrics
+if [ -f /tmp/audit/metrics.json ]; then
+  echo "=== Execution Metrics ==="
+  cat /tmp/audit/metrics.json | jq .
+  
+  IS_ERROR=$(cat /tmp/audit/metrics.json | jq -r '.is_error')
+  TOTAL_COST=$(cat /tmp/audit/metrics.json | jq -r '.total_cost_usd')
+  
+  echo ""
+  echo "Total Cost: \\$\${TOTAL_COST}"
+  echo "Error Status: \${IS_ERROR}"
+else
+  echo "No metrics data available"
+  IS_ERROR="true"
 fi
 
-echo "GitHub App configured, generating installation token..."
+echo ""
+echo "=== Validation Status ==="
+echo "Secrets Check: ${{ needs.pre-flight.outputs.validation-status }}"
+echo "Pre-flight: ${{ needs.pre-flight.result }}"
+echo "Claude Agent: ${{ needs.claude-agent.result }}"
 
-# Base64 URL-safe encoding function
-base64url() {
-  openssl base64 -A | tr '+/' '-_' | tr -d '='
-}
-
-# Generate JWT header
-HEADER=$(echo -n '{"alg":"RS256","typ":"JWT"}' | base64url)
-
-# Generate JWT payload (iat = now - 60s to account for clock drift, exp = now + 10 min)
-NOW=$(date +%s)
-IAT=$((NOW - 60))
-EXP=$((NOW + 600))
-PAYLOAD=$(echo -n "{\\"iat\\":$IAT,\\"exp\\":$EXP,\\"iss\\":\\"$GH_APP_ID\\"}" | base64url)
-
-# Sign the JWT with the private key
-UNSIGNED="$HEADER.$PAYLOAD"
-SIGNATURE=$(echo -n "$UNSIGNED" | openssl dgst -sha256 -sign <(echo "$GH_APP_PRIVATE_KEY") | base64url)
-JWT="$HEADER.$PAYLOAD.$SIGNATURE"
-
-# Get installation ID for this repository
-OWNER="\${{ github.repository_owner }}"
-REPO_NAME="\${{ github.event.repository.name }}"
-INSTALLATION_RESPONSE=$(curl -s -H "Authorization: Bearer $JWT" \\
-  -H "Accept: application/vnd.github+json" \\
-  -H "X-GitHub-Api-Version: 2022-11-28" \\
-  "https://api.github.com/repos/$OWNER/$REPO_NAME/installation")
-
-INSTALLATION_ID=$(echo "$INSTALLATION_RESPONSE" | jq -r '.id // empty')
-
-if [ -z "$INSTALLATION_ID" ]; then
-  echo "::warning::Failed to get installation ID. Is the GitHub App installed on this repository?"
-  echo "::warning::Response: $INSTALLATION_RESPONSE"
-  echo "Falling back to GITHUB_TOKEN"
-  echo "token=$FALLBACK_TOKEN" >> $GITHUB_OUTPUT
-  echo "git-user=github-actions[bot]" >> $GITHUB_OUTPUT
-  echo "git-email=github-actions[bot]@users.noreply.github.com" >> $GITHUB_OUTPUT
-  exit 0
+# Check for validation errors
+VALIDATION_ERRORS=""
+if [ -d /tmp/validation-errors ] && [ -n "$(ls -A /tmp/validation-errors 2>/dev/null)" ]; then
+  echo ""
+  echo "=== Validation Errors ==="
+  for error_file in /tmp/validation-errors/*.txt; do
+    if [ -f "\${error_file}" ]; then
+      cat "\${error_file}"
+      VALIDATION_ERRORS="\${VALIDATION_ERRORS}$(cat \${error_file})\n"
+    fi
+  done
 fi
 
-# Generate installation access token
-TOKEN_RESPONSE=$(curl -s -X POST \\
-  -H "Authorization: Bearer $JWT" \\
-  -H "Accept: application/vnd.github+json" \\
-  -H "X-GitHub-Api-Version: 2022-11-28" \\
-  "https://api.github.com/app/installations/$INSTALLATION_ID/access_tokens")
-
-TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.token // empty')
-
-if [ -z "$TOKEN" ]; then
-  echo "::warning::Failed to generate installation token"
-  echo "::warning::Response: $TOKEN_RESPONSE"
-  echo "Falling back to GITHUB_TOKEN"
-  echo "token=$FALLBACK_TOKEN" >> $GITHUB_OUTPUT
-  echo "git-user=github-actions[bot]" >> $GITHUB_OUTPUT
-  echo "git-email=github-actions[bot]@users.noreply.github.com" >> $GITHUB_OUTPUT
-  exit 0
+# Determine overall status
+if [ "${{ needs.pre-flight.result }}" != "success" ] || [ "${{ needs.claude-agent.result }}" != "success" ]; then
+  AUDIT_STATUS="failed"
+else
+  AUDIT_STATUS="success"
 fi
 
-# Mask the token in logs
-echo "::add-mask::$TOKEN"
+echo ""
+echo "Overall Status: \${AUDIT_STATUS}"
 
-# Get app info for git identity
-APP_RESPONSE=$(curl -s -H "Authorization: Bearer $JWT" \\
-  -H "Accept: application/vnd.github+json" \\
-  -H "X-GitHub-Api-Version: 2022-11-28" \\
-  "https://api.github.com/app")
+# Set outputs
+echo "status=\${AUDIT_STATUS}" >> \$GITHUB_OUTPUT
 
-APP_SLUG=$(echo "$APP_RESPONSE" | jq -r '.slug // "github-app"')
-APP_ID_NUM=$(echo "$APP_RESPONSE" | jq -r '.id // "0"')
+# Save audit report
+mkdir -p /tmp/audit
+cat > /tmp/audit/report.txt << EOF
+Agent Execution Audit Report
+============================
 
-echo "✓ Generated GitHub App token for $APP_SLUG"
-echo "token=$TOKEN" >> $GITHUB_OUTPUT
-echo "git-user=$APP_SLUG[bot]" >> $GITHUB_OUTPUT
-echo "git-email=$APP_ID_NUM+$APP_SLUG[bot]@users.noreply.github.com" >> $GITHUB_OUTPUT`,
-    };
+Agent: ${{ github.workflow }}
+Run ID: ${{ github.run_id }}
+Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+Triggered by: ${{ github.actor }}
+Event: ${{ github.event_name }}
+Started: ${{ github.event.created_at }}
+
+Validation Status: ${{ needs.pre-flight.outputs.validation-status }}
+Pre-flight Result: ${{ needs.pre-flight.result }}
+Claude Agent Result: ${{ needs.claude-agent.result }}
+
+Overall Status: \${AUDIT_STATUS}
+
+Validation Errors:
+\${VALIDATION_ERRORS}
+EOF
+
+cat /tmp/audit/report.txt
+`;
   }
 
-  async writeWorkflow(agent: AgentDefinition, outputDir: string): Promise<string> {
-    const workflowName = agentNameToWorkflowName(agent.name);
-    const fileName = `${workflowName}.yml`;
-    const filePath = `${outputDir}/${fileName}`;
+  /**
+   * Generates script to create failure issue
+   */
+  private generateFailureIssueScript(labels: string[], assignees: string[]): string {
+    const labelsJson = JSON.stringify(labels);
+    const assigneesJson = JSON.stringify(assignees);
 
-    const content = this.generate(agent);
-    await writeFile(filePath, content, 'utf-8');
+    return `#!/bin/bash
+set -e
 
-    return filePath;
+echo "Creating failure issue..."
+
+# Read audit report
+if [ -f /tmp/audit/report.txt ]; then
+  AUDIT_REPORT=$(cat /tmp/audit/report.txt)
+else
+  AUDIT_REPORT="No audit report available"
+fi
+
+# Create issue body
+ISSUE_BODY="## 🤖 Agent Execution Failed\n\n"
+ISSUE_BODY="\${ISSUE_BODY}The Claude agent \"${{ github.workflow }}\" failed to execute successfully.\n\n"
+ISSUE_BODY="\${ISSUE_BODY}### Audit Report\n\n"
+ISSUE_BODY="\${ISSUE_BODY}\\\`\\\`\\\`\n"
+ISSUE_BODY="\${ISSUE_BODY}\${AUDIT_REPORT}\n"
+ISSUE_BODY="\${ISSUE_BODY}\\\`\\\`\\\`\n\n"
+ISSUE_BODY="\${ISSUE_BODY}### Actions\n\n"
+ISSUE_BODY="\${ISSUE_BODY}- Review the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\n"
+ISSUE_BODY="\${ISSUE_BODY}- Check the agent configuration in \\\`.github/claude-agents/\\\`\n"
+ISSUE_BODY="\${ISSUE_BODY}- Verify API credentials are properly configured\n"
+
+# Create the issue
+ISSUE_DATA=$(cat << EOF
+{
+  "title": "Agent Failure: ${{ github.workflow }} (Run #${{ github.run_number }})",
+  "body": "\${ISSUE_BODY}",
+  "labels": ${labelsJson},
+  "assignees": ${assigneesJson}
+}
+EOF
+)
+
+echo "\${ISSUE_DATA}" | gh api repos/${{ github.repository }}/issues --input - | jq -r '.html_url'
+
+echo "Failure issue created successfully"
+`;
   }
 }
 
+// Export singleton instance
 export const workflowGenerator = new WorkflowGenerator();
+
