@@ -3,8 +3,12 @@ import { execSync } from 'child_process';
 import { existsSync } from 'fs';
 
 // Mock child_process
-jest.mock('child_process');
-jest.mock('fs');
+jest.mock('child_process', () => ({
+  execSync: jest.fn(),
+}));
+jest.mock('fs', () => ({
+  existsSync: jest.fn(),
+}));
 
 const mockExecSync = execSync as jest.MockedFunction<typeof execSync>;
 const mockExistsSync = existsSync as jest.MockedFunction<typeof existsSync>;
