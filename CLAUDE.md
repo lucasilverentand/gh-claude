@@ -177,15 +177,17 @@ The input system ([src/generator/input-collector.ts](src/generator/input-collect
 - Supports GraphQL for discussions
 - Time filtering handles both GNU and BSD `date` commands (Linux/macOS compatibility)
 
-### GitHub App Integration
+### GitHub App Integration (Required)
 
-The `setup-app` command ([src/cli/commands/setup-app.ts](src/cli/commands/setup-app.ts)) configures GitHub App authentication:
-- Displays interactive setup guide
+A GitHub App is **required** for gh-claude workflows. The `setup-app` command ([src/cli/commands/setup-app.ts](src/cli/commands/setup-app.ts)) configures GitHub App authentication:
+- Displays interactive setup guide with step-by-step instructions
 - Collects App ID and private key
 - Stores secrets at org level (all repos) or repo level
-- Generated workflows automatically use app token when available
+- Generated workflows require app token (no fallback to GITHUB_TOKEN)
 - Enables branded identity (commits/comments appear as the app)
 - Allows PRs created by Claude to trigger CI workflows
+
+Users must run `gh claude setup-app` before their workflows can execute.
 
 ### Agent Markdown Format
 
@@ -327,6 +329,6 @@ Dev dependencies:
 When running generated workflows:
 - `ANTHROPIC_API_KEY`: Claude API key (one required)
 - `CLAUDE_CODE_OAUTH_TOKEN`: Claude OAuth token (one required)
-- `GH_APP_ID`: GitHub App ID (optional, for branded identity)
-- `GH_APP_PRIVATE_KEY`: GitHub App private key (optional)
-- `GITHUB_TOKEN`: Default GitHub token (auto-provided by Actions)
+- `GH_APP_ID`: GitHub App ID (required - run `gh claude setup-app` to configure)
+- `GH_APP_PRIVATE_KEY`: GitHub App private key (required - run `gh claude setup-app` to configure)
+- `GITHUB_TOKEN`: Default GitHub token (auto-provided by Actions, used as fallback)

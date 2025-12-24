@@ -1,22 +1,88 @@
 ---
 title: Authentication
-description: Set up Claude API authentication for gh-claude workflows
+description: Set up Claude API and GitHub App authentication for gh-claude workflows
 ---
 
-gh-claude workflows require authentication to call the Claude API. This guide covers how to set up and manage API credentials for your GitHub Actions workflows.
+gh-claude workflows require two types of authentication:
+1. **Claude API access** - To call the Claude API
+2. **GitHub App** - For repository operations with branded identity
 
-## Authentication Methods
+This guide covers how to set up both for your GitHub Actions workflows.
 
-gh-claude supports two authentication methods:
+## Required Setup
+
+Before your workflows can run, you need to complete both:
+
+1. **Claude API key or OAuth token** - For Claude API access
+2. **GitHub App** - For repository operations (required)
+
+## GitHub App Setup (Required)
+
+A GitHub App is **required** for gh-claude workflows. The app provides:
+- **Branded identity**: Commits and comments appear as your app (e.g., "Claude[bot]")
+- **CI triggering**: PRs created by Claude can trigger CI workflows
+- **Fine-grained permissions**: Control exactly what operations Claude can perform
+
+### Quick Setup
+
+```bash
+gh claude setup-app
+```
+
+This interactive command guides you through:
+1. Creating a new GitHub App with the correct permissions
+2. Generating and downloading the private key
+3. Storing the credentials as GitHub secrets
+4. Installing the app on your repository
+
+### Required App Permissions
+
+When creating your GitHub App, configure these repository permissions:
+- **Contents**: Read and write
+- **Issues**: Read and write
+- **Pull requests**: Read and write
+- **Metadata**: Read-only (auto-selected)
+- **Workflows**: Read and write (enables CI triggering)
+
+### Secrets Created
+
+The setup creates these GitHub secrets:
+- `GH_APP_ID`: Your GitHub App's ID
+- `GH_APP_PRIVATE_KEY`: Your GitHub App's private key
+
+These can be stored at organization level (shared across repos) or repository level.
+
+### Troubleshooting GitHub App
+
+If workflows fail with "GitHub App is not configured":
+
+1. Verify secrets are set:
+   ```bash
+   gh secret list
+   ```
+   You should see `GH_APP_ID` and `GH_APP_PRIVATE_KEY`.
+
+2. Ensure the app is installed on the repository:
+   - Go to your GitHub App settings → "Install App"
+   - Select the repository
+
+3. Re-run setup if needed:
+   ```bash
+   gh claude setup-app --force
+   ```
+
+## Claude API Authentication
+
+gh-claude supports two methods for Claude API access:
 
 1. **API Key** (ANTHROPIC_API_KEY) - Traditional API key for Anthropic API access
 2. **OAuth Token** (CLAUDE_CODE_OAUTH_TOKEN) - OAuth token from Claude Pro/Team subscription
 
 Both methods work identically in workflows. Choose based on your access type.
 
-## Quick Setup
+## API Key Quick Setup
 
-The easiest way to set up authentication:
+The easiest way to set up Claude API authentication:
 
 ```bash
 gh claude setup-token

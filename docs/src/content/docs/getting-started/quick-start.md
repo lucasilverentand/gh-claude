@@ -27,7 +27,17 @@ Add your Anthropic API key as a repository secret:
 gh secret set ANTHROPIC_API_KEY
 ```
 
-## 3. Create Your First Agent
+## 3. Set Up GitHub App
+
+A GitHub App is required for gh-claude workflows. Run the interactive setup:
+
+```bash
+gh claude setup-app
+```
+
+This will guide you through creating a GitHub App and storing the credentials. The app enables branded identity (commits appear as your app) and allows PRs created by Claude to trigger CI workflows.
+
+## 4. Create Your First Agent
 
 Create a new file at `.github/claude-agents/issue-triage.md`:
 
@@ -55,7 +65,7 @@ Analyze new issues and:
 Be helpful and welcoming!
 ```
 
-## 4. Compile to Workflow
+## 5. Compile to Workflow
 
 Generate the GitHub Actions workflow:
 
@@ -65,7 +75,7 @@ gh claude compile --all
 
 This creates `.github/workflows/claude-issue-triage.yml` with the complete workflow definition.
 
-## 5. Commit and Deploy
+## 6. Commit and Deploy
 
 Commit your changes and push to GitHub:
 

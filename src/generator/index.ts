@@ -1176,33 +1176,31 @@ fi
   }
 
   /**
-   * Generates a step that creates a GitHub App token if GH_APP_ID and GH_APP_PRIVATE_KEY
-   * secrets are configured. Falls back to GITHUB_TOKEN if not configured.
+   * Generates a step that creates a GitHub App token using the configured
+   * GH_APP_ID and GH_APP_PRIVATE_KEY secrets. GitHub App setup is required.
    *
    * Outputs:
-   * - token: The GitHub token to use (app token or GITHUB_TOKEN)
-   * - git-user: The git user.name to use (app name[bot] or github-actions[bot])
+   * - token: The GitHub App installation token
+   * - git-user: The git user.name to use (app name[bot])
    * - git-email: The git user.email to use
    */
   private generateTokenGenerationStep(): WorkflowStep {
     return {
-      name: 'Generate GitHub token',
+      name: 'Generate GitHub App token',
       id: 'app-token',
       env: {
         GH_APP_ID: '${{ secrets.GH_APP_ID }}',
         GH_APP_PRIVATE_KEY: '${{ secrets.GH_APP_PRIVATE_KEY }}',
-        FALLBACK_TOKEN: '${{ secrets.GITHUB_TOKEN }}',
       },
-      run: `# Check if GitHub App is configured
+      run: `# Verify GitHub App is configured (required)
 if [ -z "$GH_APP_ID" ] || [ -z "$GH_APP_PRIVATE_KEY" ]; then
-  echo "No GitHub App configured, using default GITHUB_TOKEN"
-  echo "token=$FALLBACK_TOKEN" >> $GITHUB_OUTPUT
-  echo "git-user=github-actions[bot]" >> $GITHUB_OUTPUT
-  echo "git-email=github-actions[bot]@users.noreply.github.com" >> $GITHUB_OUTPUT
-  exit 0
+  echo "::error::GitHub App is not configured. This is required for gh-claude workflows."
+  echo "::error::Run 'gh claude setup-app' to configure your GitHub App."
+  echo "::error::See: https://gh-claude.dev/getting-started/installation/#github-app-setup"
+  exit 1
 fi
 
-echo "GitHub App configured, generating installation token..."
+echo "Generating GitHub App installation token..."
 
 # Base64 URL-safe encoding function
 base64url() {
@@ -1234,13 +1232,10 @@ INSTALLATION_RESPONSE=$(curl -s -H "Authorization: Bearer $JWT" \\
 INSTALLATION_ID=$(echo "$INSTALLATION_RESPONSE" | jq -r '.id // empty')
 
 if [ -z "$INSTALLATION_ID" ]; then
-  echo "::warning::Failed to get installation ID. Is the GitHub App installed on this repository?"
-  echo "::warning::Response: $INSTALLATION_RESPONSE"
-  echo "Falling back to GITHUB_TOKEN"
-  echo "token=$FALLBACK_TOKEN" >> $GITHUB_OUTPUT
-  echo "git-user=github-actions[bot]" >> $GITHUB_OUTPUT
-  echo "git-email=github-actions[bot]@users.noreply.github.com" >> $GITHUB_OUTPUT
-  exit 0
+  echo "::error::Failed to get installation ID. Is the GitHub App installed on this repository?"
+  echo "::error::Response: $INSTALLATION_RESPONSE"
+  echo "::error::Go to your GitHub App settings and install it on this repository."
+  exit 1
 fi
 
 # Generate installation access token
@@ -1253,13 +1248,10 @@ TOKEN_RESPONSE=$(curl -s -X POST \\
 TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.token // empty')
 
 if [ -z "$TOKEN" ]; then
-  echo "::warning::Failed to generate installation token"
-  echo "::warning::Response: $TOKEN_RESPONSE"
-  echo "Falling back to GITHUB_TOKEN"
-  echo "token=$FALLBACK_TOKEN" >> $GITHUB_OUTPUT
-  echo "git-user=github-actions[bot]" >> $GITHUB_OUTPUT
-  echo "git-email=github-actions[bot]@users.noreply.github.com" >> $GITHUB_OUTPUT
-  exit 0
+  echo "::error::Failed to generate installation token"
+  echo "::error::Response: $TOKEN_RESPONSE"
+  echo "::error::Check that your GitHub App private key is correctly configured."
+  exit 1
 fi
 
 # Mask the token in logs

@@ -83,6 +83,44 @@ If no matching data is found in the time window, the workflow skips to save API 
 
 ### Pre-flight Job Failures
 
+#### GitHub App Errors
+
+**Error: GitHub App is not configured**
+
+The workflow requires a GitHub App. Run the setup command:
+
+```bash
+gh claude setup-app
+```
+
+This will guide you through creating a GitHub App and storing the credentials.
+
+**Verify the secrets exist:**
+
+```bash
+gh secret list
+```
+
+You should see both `GH_APP_ID` and `GH_APP_PRIVATE_KEY`.
+
+**Error: Failed to get installation ID**
+
+The GitHub App exists but isn't installed on this repository:
+
+1. Go to your GitHub App settings
+2. Click "Install App" in the sidebar
+3. Select the repository where you want to use gh-claude
+
+**Error: Failed to generate installation token**
+
+The private key may be invalid or expired:
+
+```bash
+gh claude setup-app --force
+```
+
+This regenerates the credentials.
+
 #### Secret Validation Errors
 
 **Error: No Claude authentication found**
@@ -699,6 +737,9 @@ Some behaviors are intentional:
 - [ ] Changes committed and pushed to GitHub
 - [ ] GitHub Actions enabled in repository settings
 - [ ] `ANTHROPIC_API_KEY` secret configured
+- [ ] GitHub App configured (`gh claude setup-app`)
+- [ ] `GH_APP_ID` and `GH_APP_PRIVATE_KEY` secrets exist
+- [ ] GitHub App is installed on the repository
 - [ ] Trigger configuration matches the event
 - [ ] Required labels present (if configured)
 - [ ] User has required permissions
@@ -711,6 +752,8 @@ Some behaviors are intentional:
 | Problem | Quick Fix |
 |---------|-----------|
 | Agent not triggering | `gh claude compile --all && git push` |
+| GitHub App not configured | `gh claude setup-app` |
+| App not installed on repo | Go to GitHub App settings → Install App |
 | Secret not found | `gh secret set ANTHROPIC_API_KEY` |
 | Validation errors | `gh claude validate --all --strict` |
 | See what would generate | `gh claude compile --dry-run --all` |
