@@ -36,6 +36,12 @@ export default defineConfig({
           ],
         },
         {
+          label: 'Agent Gallery',
+          items: [
+            { label: 'Overview', slug: 'agents/overview' },
+          ],
+        },
+        {
           label: 'Inputs',
           items: [
             { label: 'Overview', slug: 'inputs' },
@@ -74,7 +80,7 @@ export default defineConfig({
           ],
         },
         {
-          label: 'CLI Commands',
+          label: 'CLI Reference',
           collapsed: true,
           items: [
             { label: 'init', slug: 'cli/init' },
