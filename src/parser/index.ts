@@ -142,12 +142,14 @@ export class AgentParser {
       agent.on.issues ||
       agent.on.pull_request ||
       agent.on.discussion ||
-      agent.on.repository_dispatch
+      agent.on.repository_dispatch ||
+      agent.on.release
     );
     const hasSchedule = !!agent.on.schedule;
     const hasManualTrigger = !!agent.on.workflow_dispatch;
+    const hasWorkflowTrigger = !!agent.on.workflow_run;
 
-    if (!hasEventTrigger && !hasSchedule && !hasManualTrigger) {
+    if (!hasEventTrigger && !hasSchedule && !hasManualTrigger && !hasWorkflowTrigger) {
       errors.push({
         field: 'on',
         message: 'At least one trigger must be specified',

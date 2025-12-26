@@ -87,6 +87,71 @@ Multi trigger agent.`;
       expect(errors).toHaveLength(0);
     });
 
+    it('should parse release trigger', () => {
+      const content = `---
+name: Release Handler
+on:
+  release:
+    types: [published, created]
+---
+
+Handle releases.`;
+
+      const { agent, errors } = parser.parseContent(content, 'test.md');
+
+      expect(agent).toBeDefined();
+      expect(agent?.name).toBe('Release Handler');
+      expect(agent?.on.release).toEqual({ types: ['published', 'created'] });
+      expect(errors).toHaveLength(0);
+    });
+
+    it('should parse workflow_run trigger', () => {
+      const content = `---
+name: CI Watcher
+on:
+  workflow_run:
+    workflows: [CI, Tests]
+    types: [completed]
+    branches: [main]
+---
+
+Watch CI runs.`;
+
+      const { agent, errors } = parser.parseContent(content, 'test.md');
+
+      expect(agent).toBeDefined();
+      expect(agent?.name).toBe('CI Watcher');
+      expect(agent?.on.workflow_run).toEqual({
+        workflows: ['CI', 'Tests'],
+        types: ['completed'],
+        branches: ['main'],
+      });
+      expect(errors).toHaveLength(0);
+    });
+
+    it('should parse workflow_run with branches-ignore', () => {
+      const content = `---
+name: CI Watcher
+on:
+  workflow_run:
+    workflows: [Build]
+    branches-ignore:
+      - 'dependabot/**'
+      - 'renovate/**'
+---
+
+Watch builds.`;
+
+      const { agent, errors } = parser.parseContent(content, 'test.md');
+
+      expect(agent).toBeDefined();
+      expect(agent?.on.workflow_run).toEqual({
+        workflows: ['Build'],
+        'branches-ignore': ['dependabot/**', 'renovate/**'],
+      });
+      expect(errors).toHaveLength(0);
+    });
+
     it('should fail without frontmatter', () => {
       const content = 'Just markdown with no frontmatter';
 
@@ -239,6 +304,61 @@ Body`;
       const agent = {
         name: 'Test',
         on: { schedule: [{ cron: '0 9 * * *' }] },
+        markdown: 'Test',
+      };
+
+      const errors = parser.validateAgent(agent);
+      expect(errors).toHaveLength(0);
+    });
+
+    it('should accept release as valid trigger', () => {
+      const agent = {
+        name: 'Test',
+        on: { release: { types: ['published'] } },
+        markdown: 'Test',
+      };
+
+      const errors = parser.validateAgent(agent);
+      expect(errors).toHaveLength(0);
+    });
+
+    it('should accept workflow_run as valid trigger', () => {
+      const agent = {
+        name: 'Test',
+        on: { workflow_run: { workflows: ['CI'], types: ['completed'] } },
+        markdown: 'Test',
+      };
+
+      const errors = parser.validateAgent(agent);
+      expect(errors).toHaveLength(0);
+    });
+
+    it('should accept workflow_run with branch filtering', () => {
+      const agent = {
+        name: 'Test',
+        on: {
+          workflow_run: {
+            workflows: ['CI', 'Tests'],
+            types: ['completed'],
+            branches: ['main', 'develop'],
+          },
+        },
+        markdown: 'Test',
+      };
+
+      const errors = parser.validateAgent(agent);
+      expect(errors).toHaveLength(0);
+    });
+
+    it('should accept workflow_run with branches-ignore', () => {
+      const agent = {
+        name: 'Test',
+        on: {
+          workflow_run: {
+            workflows: ['CI'],
+            'branches-ignore': ['dependabot/**'],
+          },
+        },
         markdown: 'Test',
       };
 

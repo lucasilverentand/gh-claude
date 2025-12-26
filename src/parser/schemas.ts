@@ -41,6 +41,19 @@ const triggerConfigSchema = z.object({
       types: z.array(z.string()).optional(),
     })
     .optional(),
+  release: z
+    .object({
+      types: z.array(z.string()).optional(),
+    })
+    .optional(),
+  workflow_run: z
+    .object({
+      workflows: z.array(z.string()),
+      types: z.array(z.string()).optional(),
+      branches: z.array(z.string()).optional(),
+      'branches-ignore': z.array(z.string()).optional(),
+    })
+    .optional(),
 });
 
 const permissionsSchema = z

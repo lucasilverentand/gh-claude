@@ -41,6 +41,15 @@ export interface TriggerConfig {
   repository_dispatch?: {
     types?: string[];
   };
+  release?: {
+    types?: string[];
+  };
+  workflow_run?: {
+    workflows: string[];
+    types?: string[];
+    branches?: string[];
+    'branches-ignore'?: string[];
+  };
 }
 
 export interface WorkflowInput {

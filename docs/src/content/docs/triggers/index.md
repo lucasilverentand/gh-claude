@@ -14,6 +14,7 @@ Respond to activity in your repository:
 - **[Issues](issues/)** - React to issue activity (opened, labeled, closed, etc.)
 - **[Pull Requests](pull-requests/)** - Respond to PR events (opened, synchronize, ready_for_review, etc.)
 - **[Discussions](discussions/)** - Handle discussion activity (created, answered, etc.)
+- **[Release](release/)** - React to release events (published, created, edited, etc.)
 
 ### Time-Based Triggers
 
@@ -27,6 +28,12 @@ Trigger agents on-demand:
 
 - **[Workflow Dispatch](workflow-dispatch/)** - Manual triggering with optional inputs
 - **[Repository Dispatch](repository-dispatch/)** - Trigger via API or webhooks
+
+### Workflow Events
+
+Chain workflows together:
+
+- **[Workflow Run](workflow-run/)** - Trigger when another workflow completes
 
 ## Basic Usage
 
@@ -144,6 +151,8 @@ Explore detailed documentation for each trigger type:
 - [Issue Events](issues/)
 - [Pull Request Events](pull-requests/)
 - [Discussion Events](discussions/)
+- [Release Events](release/)
 - [Schedule Triggers](schedule/)
 - [Workflow Dispatch](workflow-dispatch/)
 - [Repository Dispatch](repository-dispatch/)
+- [Workflow Run](workflow-run/)
