@@ -87,6 +87,58 @@ Multi trigger agent.`;
       expect(errors).toHaveLength(0);
     });
 
+    it('should parse push trigger with branches', () => {
+      const content = `---
+name: Push Agent
+on:
+  push:
+    branches: [main, develop]
+---
+
+Push to main or develop.`;
+
+      const { agent, errors } = parser.parseContent(content, 'test.md');
+
+      expect(agent).toBeDefined();
+      expect(agent?.name).toBe('Push Agent');
+      expect(agent?.on.push).toEqual({ branches: ['main', 'develop'] });
+      expect(errors).toHaveLength(0);
+    });
+
+    it('should parse push trigger with all filter options', () => {
+      const content = `---
+name: Full Push Agent
+on:
+  push:
+    branches:
+      - main
+      - 'release/**'
+    branches-ignore:
+      - 'dependabot/**'
+    tags:
+      - 'v*'
+    tags-ignore:
+      - '*-beta'
+    paths:
+      - 'src/**'
+    paths-ignore:
+      - '**/*.test.ts'
+---
+
+Full push configuration.`;
+
+      const { agent, errors } = parser.parseContent(content, 'test.md');
+
+      expect(agent).toBeDefined();
+      expect(agent?.on.push?.branches).toEqual(['main', 'release/**']);
+      expect(agent?.on.push?.['branches-ignore']).toEqual(['dependabot/**']);
+      expect(agent?.on.push?.tags).toEqual(['v*']);
+      expect(agent?.on.push?.['tags-ignore']).toEqual(['*-beta']);
+      expect(agent?.on.push?.paths).toEqual(['src/**']);
+      expect(agent?.on.push?.['paths-ignore']).toEqual(['**/*.test.ts']);
+      expect(errors).toHaveLength(0);
+    });
+
     it('should fail without frontmatter', () => {
       const content = 'Just markdown with no frontmatter';
 
@@ -239,6 +291,92 @@ Body`;
       const agent = {
         name: 'Test',
         on: { schedule: [{ cron: '0 9 * * *' }] },
+        markdown: 'Test',
+      };
+
+      const errors = parser.validateAgent(agent);
+      expect(errors).toHaveLength(0);
+    });
+
+    it('should accept push as valid trigger', () => {
+      const agent = {
+        name: 'Test',
+        on: { push: { branches: ['main'] } },
+        markdown: 'Test',
+      };
+
+      const errors = parser.validateAgent(agent);
+      expect(errors).toHaveLength(0);
+    });
+
+    it('should accept push with branches-ignore', () => {
+      const agent = {
+        name: 'Test',
+        on: { push: { 'branches-ignore': ['dependabot/**'] } },
+        markdown: 'Test',
+      };
+
+      const errors = parser.validateAgent(agent);
+      expect(errors).toHaveLength(0);
+    });
+
+    it('should accept push with tags filter', () => {
+      const agent = {
+        name: 'Test',
+        on: { push: { tags: ['v*'] } },
+        markdown: 'Test',
+      };
+
+      const errors = parser.validateAgent(agent);
+      expect(errors).toHaveLength(0);
+    });
+
+    it('should accept push with paths filter', () => {
+      const agent = {
+        name: 'Test',
+        on: { push: { branches: ['main'], paths: ['src/**'] } },
+        markdown: 'Test',
+      };
+
+      const errors = parser.validateAgent(agent);
+      expect(errors).toHaveLength(0);
+    });
+
+    it('should accept push with paths-ignore filter', () => {
+      const agent = {
+        name: 'Test',
+        on: { push: { branches: ['main'], 'paths-ignore': ['docs/**', '*.md'] } },
+        markdown: 'Test',
+      };
+
+      const errors = parser.validateAgent(agent);
+      expect(errors).toHaveLength(0);
+    });
+
+    it('should accept push with all filter options', () => {
+      const agent = {
+        name: 'Test',
+        on: {
+          push: {
+            branches: ['main', 'release/**'],
+            'branches-ignore': ['dependabot/**'],
+            tags: ['v*'],
+            'tags-ignore': ['*-beta'],
+            paths: ['src/**'],
+            'paths-ignore': ['**/*.test.ts'],
+          },
+        },
+        markdown: 'Test',
+      };
+
+      const errors = parser.validateAgent(agent);
+      expect(errors).toHaveLength(0);
+    });
+
+    it('should accept empty push trigger', () => {
+      const agent = {
+        name: 'Test',
+        on: { push: {} },
         markdown: 'Test',
       };
 

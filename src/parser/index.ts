@@ -142,6 +142,7 @@ export class AgentParser {
       agent.on.issues ||
       agent.on.pull_request ||
       agent.on.discussion ||
+      agent.on.push ||
       agent.on.repository_dispatch
     );
     const hasSchedule = !!agent.on.schedule;

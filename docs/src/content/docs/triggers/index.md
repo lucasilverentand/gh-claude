@@ -13,6 +13,7 @@ Respond to activity in your repository:
 
 - **[Issues](issues/)** - React to issue activity (opened, labeled, closed, etc.)
 - **[Pull Requests](pull-requests/)** - Respond to PR events (opened, synchronize, ready_for_review, etc.)
+- **[Push](push/)** - React to code pushes (branches and tags)
 - **[Discussions](discussions/)** - Handle discussion activity (created, answered, etc.)
 
 ### Time-Based Triggers
@@ -143,6 +144,7 @@ Explore detailed documentation for each trigger type:
 
 - [Issue Events](issues/)
 - [Pull Request Events](pull-requests/)
+- [Push Events](push/)
 - [Discussion Events](discussions/)
 - [Schedule Triggers](schedule/)
 - [Workflow Dispatch](workflow-dispatch/)

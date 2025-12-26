@@ -32,6 +32,14 @@ export interface TriggerConfig {
   discussion?: {
     types?: string[];
   };
+  push?: {
+    branches?: string[];
+    'branches-ignore'?: string[];
+    tags?: string[];
+    'tags-ignore'?: string[];
+    paths?: string[];
+    'paths-ignore'?: string[];
+  };
   schedule?: Array<{
     cron: string;
   }>;

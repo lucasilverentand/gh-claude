@@ -24,6 +24,16 @@ const triggerConfigSchema = z.object({
       types: z.array(z.string()).optional(),
     })
     .optional(),
+  push: z
+    .object({
+      branches: z.array(z.string()).optional(),
+      'branches-ignore': z.array(z.string()).optional(),
+      tags: z.array(z.string()).optional(),
+      'tags-ignore': z.array(z.string()).optional(),
+      paths: z.array(z.string()).optional(),
+      'paths-ignore': z.array(z.string()).optional(),
+    })
+    .optional(),
   schedule: z
     .array(
       z.object({
