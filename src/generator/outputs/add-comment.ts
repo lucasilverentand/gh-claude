@@ -48,7 +48,7 @@ Or for multiple comments:
   }
 
   generateValidationScript(config: OutputConfig, runtime: RuntimeContext): string {
-    const issueOrPrNumber = runtime.issueNumber || runtime.prNumber;
+    const issueOrPrNumber = runtime.issueOrPrNumber;
     const maxConstraint = config.max;
 
     return `
