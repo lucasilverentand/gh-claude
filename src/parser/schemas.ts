@@ -19,6 +19,18 @@ const triggerConfigSchema = z.object({
       types: z.array(z.string()).optional(),
     })
     .optional(),
+  pull_request_review: z
+    .object({
+      types: z.array(z.string()).optional(),
+    })
+    .optional(),
+  pull_request_target: z
+    .object({
+      types: z.array(z.string()).optional(),
+      branches: z.array(z.string()).optional(),
+      'branches-ignore': z.array(z.string()).optional(),
+    })
+    .optional(),
   discussion: z
     .object({
       types: z.array(z.string()).optional(),

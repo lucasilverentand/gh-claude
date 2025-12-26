@@ -87,6 +87,66 @@ Multi trigger agent.`;
       expect(errors).toHaveLength(0);
     });
 
+    it('should parse pull_request_review trigger', () => {
+      const content = `---
+name: Review Handler
+on:
+  pull_request_review:
+    types: [submitted, dismissed]
+---
+
+Handle PR reviews.`;
+
+      const { agent, errors } = parser.parseContent(content, 'test.md');
+
+      expect(agent).toBeDefined();
+      expect(agent?.name).toBe('Review Handler');
+      expect(agent?.on.pull_request_review).toEqual({ types: ['submitted', 'dismissed'] });
+      expect(errors).toHaveLength(0);
+    });
+
+    it('should parse pull_request_target trigger', () => {
+      const content = `---
+name: Fork PR Handler
+on:
+  pull_request_target:
+    types: [opened]
+    branches: [main]
+---
+
+Handle fork PRs safely.`;
+
+      const { agent, errors } = parser.parseContent(content, 'test.md');
+
+      expect(agent).toBeDefined();
+      expect(agent?.name).toBe('Fork PR Handler');
+      expect(agent?.on.pull_request_target).toEqual({ types: ['opened'], branches: ['main'] });
+      expect(errors).toHaveLength(0);
+    });
+
+    it('should parse pull_request_target with branches-ignore', () => {
+      const content = `---
+name: Fork PR Handler
+on:
+  pull_request_target:
+    types: [opened]
+    branches-ignore:
+      - dependabot/**
+      - renovate/**
+---
+
+Handle fork PRs safely.`;
+
+      const { agent, errors } = parser.parseContent(content, 'test.md');
+
+      expect(agent).toBeDefined();
+      expect(agent?.on.pull_request_target).toEqual({
+        types: ['opened'],
+        'branches-ignore': ['dependabot/**', 'renovate/**'],
+      });
+      expect(errors).toHaveLength(0);
+    });
+
     it('should fail without frontmatter', () => {
       const content = 'Just markdown with no frontmatter';
 
@@ -239,6 +299,39 @@ Body`;
       const agent = {
         name: 'Test',
         on: { schedule: [{ cron: '0 9 * * *' }] },
+        markdown: 'Test',
+      };
+
+      const errors = parser.validateAgent(agent);
+      expect(errors).toHaveLength(0);
+    });
+
+    it('should accept pull_request_review as valid trigger', () => {
+      const agent = {
+        name: 'Test',
+        on: { pull_request_review: { types: ['submitted'] } },
+        markdown: 'Test',
+      };
+
+      const errors = parser.validateAgent(agent);
+      expect(errors).toHaveLength(0);
+    });
+
+    it('should accept pull_request_target as valid trigger', () => {
+      const agent = {
+        name: 'Test',
+        on: { pull_request_target: { types: ['opened'], branches: ['main'] } },
+        markdown: 'Test',
+      };
+
+      const errors = parser.validateAgent(agent);
+      expect(errors).toHaveLength(0);
+    });
+
+    it('should accept pull_request_target with branches-ignore', () => {
+      const agent = {
+        name: 'Test',
+        on: { pull_request_target: { types: ['opened'], 'branches-ignore': ['dependabot/**'] } },
         markdown: 'Test',
       };
 

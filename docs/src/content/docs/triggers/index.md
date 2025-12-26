@@ -13,6 +13,8 @@ Respond to activity in your repository:
 
 - **[Issues](issues/)** - React to issue activity (opened, labeled, closed, etc.)
 - **[Pull Requests](pull-requests/)** - Respond to PR events (opened, synchronize, ready_for_review, etc.)
+- **[PR Review Events](pull-request-review/)** - Respond to review submissions (submitted, edited, dismissed)
+- **[Pull Request Target](pull-request-target/)** - Safely handle PRs from forks with access to secrets
 - **[Discussions](discussions/)** - Handle discussion activity (created, answered, etc.)
 
 ### Time-Based Triggers
@@ -143,6 +145,8 @@ Explore detailed documentation for each trigger type:
 
 - [Issue Events](issues/)
 - [Pull Request Events](pull-requests/)
+- [PR Review Events](pull-request-review/)
+- [Pull Request Target](pull-request-target/)
 - [Discussion Events](discussions/)
 - [Schedule Triggers](schedule/)
 - [Workflow Dispatch](workflow-dispatch/)

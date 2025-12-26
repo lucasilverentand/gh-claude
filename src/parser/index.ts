@@ -141,6 +141,8 @@ export class AgentParser {
     const hasEventTrigger = !!(
       agent.on.issues ||
       agent.on.pull_request ||
+      agent.on.pull_request_review ||
+      agent.on.pull_request_target ||
       agent.on.discussion ||
       agent.on.repository_dispatch
     );

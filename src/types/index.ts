@@ -29,6 +29,14 @@ export interface TriggerConfig {
   pull_request?: {
     types?: string[];
   };
+  pull_request_review?: {
+    types?: string[];
+  };
+  pull_request_target?: {
+    types?: string[];
+    branches?: string[];
+    'branches-ignore'?: string[];
+  };
   discussion?: {
     types?: string[];
   };
