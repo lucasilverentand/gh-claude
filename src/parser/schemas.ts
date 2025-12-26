@@ -24,6 +24,21 @@ const triggerConfigSchema = z.object({
       types: z.array(z.string()).optional(),
     })
     .optional(),
+  issue_comment: z
+    .object({
+      types: z.array(z.string()).optional(),
+    })
+    .optional(),
+  pull_request_review_comment: z
+    .object({
+      types: z.array(z.string()).optional(),
+    })
+    .optional(),
+  discussion_comment: z
+    .object({
+      types: z.array(z.string()).optional(),
+    })
+    .optional(),
   schedule: z
     .array(
       z.object({

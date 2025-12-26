@@ -32,6 +32,15 @@ export interface TriggerConfig {
   discussion?: {
     types?: string[];
   };
+  issue_comment?: {
+    types?: string[];
+  };
+  pull_request_review_comment?: {
+    types?: string[];
+  };
+  discussion_comment?: {
+    types?: string[];
+  };
   schedule?: Array<{
     cron: string;
   }>;

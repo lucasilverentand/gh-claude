@@ -87,6 +87,57 @@ Multi trigger agent.`;
       expect(errors).toHaveLength(0);
     });
 
+    it('should parse issue_comment trigger', () => {
+      const content = `---
+name: Comment Agent
+on:
+  issue_comment:
+    types: [created, edited]
+---
+
+Handle comments.`;
+
+      const { agent, errors } = parser.parseContent(content, 'test.md');
+
+      expect(agent).toBeDefined();
+      expect(agent?.on.issue_comment).toEqual({ types: ['created', 'edited'] });
+      expect(errors).toHaveLength(0);
+    });
+
+    it('should parse pull_request_review_comment trigger', () => {
+      const content = `---
+name: Review Comment Agent
+on:
+  pull_request_review_comment:
+    types: [created]
+---
+
+Handle review comments.`;
+
+      const { agent, errors } = parser.parseContent(content, 'test.md');
+
+      expect(agent).toBeDefined();
+      expect(agent?.on.pull_request_review_comment).toEqual({ types: ['created'] });
+      expect(errors).toHaveLength(0);
+    });
+
+    it('should parse discussion_comment trigger', () => {
+      const content = `---
+name: Discussion Comment Agent
+on:
+  discussion_comment:
+    types: [created, deleted]
+---
+
+Handle discussion comments.`;
+
+      const { agent, errors } = parser.parseContent(content, 'test.md');
+
+      expect(agent).toBeDefined();
+      expect(agent?.on.discussion_comment).toEqual({ types: ['created', 'deleted'] });
+      expect(errors).toHaveLength(0);
+    });
+
     it('should fail without frontmatter', () => {
       const content = 'Just markdown with no frontmatter';
 
@@ -239,6 +290,39 @@ Body`;
       const agent = {
         name: 'Test',
         on: { schedule: [{ cron: '0 9 * * *' }] },
+        markdown: 'Test',
+      };
+
+      const errors = parser.validateAgent(agent);
+      expect(errors).toHaveLength(0);
+    });
+
+    it('should accept issue_comment as valid trigger', () => {
+      const agent = {
+        name: 'Test',
+        on: { issue_comment: { types: ['created'] } },
+        markdown: 'Test',
+      };
+
+      const errors = parser.validateAgent(agent);
+      expect(errors).toHaveLength(0);
+    });
+
+    it('should accept pull_request_review_comment as valid trigger', () => {
+      const agent = {
+        name: 'Test',
+        on: { pull_request_review_comment: { types: ['created'] } },
+        markdown: 'Test',
+      };
+
+      const errors = parser.validateAgent(agent);
+      expect(errors).toHaveLength(0);
+    });
+
+    it('should accept discussion_comment as valid trigger', () => {
+      const agent = {
+        name: 'Test',
+        on: { discussion_comment: { types: ['created'] } },
         markdown: 'Test',
       };
 

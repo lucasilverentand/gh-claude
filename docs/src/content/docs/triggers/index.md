@@ -15,6 +15,14 @@ Respond to activity in your repository:
 - **[Pull Requests](pull-requests/)** - Respond to PR events (opened, synchronize, ready_for_review, etc.)
 - **[Discussions](discussions/)** - Handle discussion activity (created, answered, etc.)
 
+### Comment-Based Triggers
+
+Respond to comments in your repository:
+
+- **[Issue & PR Comments](issue-comment/)** - React to comments on issues and PRs (IssueOps, Q&A, moderation)
+- **[PR Review Comments](pull-request-review-comment/)** - Respond to inline code review comments
+- **[Discussion Comments](discussion-comment/)** - Handle follow-up comments in discussions
+
 ### Time-Based Triggers
 
 Run on a schedule:
@@ -144,6 +152,9 @@ Explore detailed documentation for each trigger type:
 - [Issue Events](issues/)
 - [Pull Request Events](pull-requests/)
 - [Discussion Events](discussions/)
+- [Issue & PR Comments](issue-comment/)
+- [PR Review Comments](pull-request-review-comment/)
+- [Discussion Comments](discussion-comment/)
 - [Schedule Triggers](schedule/)
 - [Workflow Dispatch](workflow-dispatch/)
 - [Repository Dispatch](repository-dispatch/)
