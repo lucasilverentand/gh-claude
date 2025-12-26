@@ -57,7 +57,7 @@ Create \`/tmp/outputs/remove-label.json\` with:
   }
 
   generateValidationScript(_config: OutputConfig, runtime: RuntimeContext): string {
-    const issueOrPrNumber = runtime.issueNumber || runtime.prNumber;
+    const issueOrPrNumber = runtime.issueOrPrNumber;
 
     return `
 # Validate and execute remove-label output

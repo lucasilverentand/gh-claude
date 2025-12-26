@@ -61,7 +61,7 @@ Create \`/tmp/outputs/add-label.json\` with:
   }
 
   generateValidationScript(_config: OutputConfig, runtime: RuntimeContext): string {
-    const issueOrPrNumber = runtime.issueNumber || runtime.prNumber;
+    const issueOrPrNumber = runtime.issueOrPrNumber;
 
     return `
 # Validate and execute add-label output(s)
