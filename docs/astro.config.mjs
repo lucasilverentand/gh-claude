@@ -118,6 +118,8 @@ export default defineConfig({
           collapsed: true,
           items: [
             { label: 'Advanced Topics', slug: 'guide/advanced' },
+            { label: 'Multi-Agent Patterns', slug: 'guide/multi-agent-patterns' },
+            { label: 'Testing Strategies', slug: 'guide/testing-strategies' },
             { label: 'Troubleshooting', slug: 'guide/troubleshooting' },
           ],
         },
