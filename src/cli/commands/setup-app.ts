@@ -1,4 +1,6 @@
 import { execSync } from 'child_process';
+import { existsSync, readFileSync } from 'fs';
+import { resolve } from 'path';
 import ora from 'ora';
 import { logger } from '../utils/logger';
 import * as readline from 'readline';
@@ -26,29 +28,17 @@ function promptForInput(question: string): Promise<string> {
 }
 
 /**
- * Prompts for multiline input (for private key)
+ * Reads a private key from a file path
  */
-function promptForMultilineInput(prompt: string, endMarker: string): Promise<string> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
+function readPrivateKeyFile(filePath: string): string {
+  const resolvedPath = resolve(filePath.replace(/^~/, process.env.HOME || ''));
 
-  return new Promise((resolve) => {
-    logger.info(prompt);
-    logger.log(`(End with a line containing only "${endMarker}")`);
-    logger.newline();
+  if (!existsSync(resolvedPath)) {
+    throw new Error(`File not found: ${resolvedPath}`);
+  }
 
-    const lines: string[] = [];
-    rl.on('line', (line) => {
-      if (line.trim() === endMarker) {
-        rl.close();
-        resolve(lines.join('\n'));
-      } else {
-        lines.push(line);
-      }
-    });
-  });
+  const content = readFileSync(resolvedPath, 'utf-8');
+  return content.trim();
 }
 
 /**
@@ -359,24 +349,25 @@ export async function setupAppCommand(options: SetupAppOptions): Promise<void> {
 
   logger.newline();
 
-  // Collect Private Key
-  logger.info('Enter your private key (paste the contents of the .pem file):');
-  const privateKey = await promptForMultilineInput(
-    'Paste the entire contents of your .pem file:',
-    'END'
-  );
+  // Collect Private Key via file path
+  logger.info('Enter the path to your private key file (.pem file downloaded from GitHub):');
+  logger.log('  Tip: You can drag and drop the file into the terminal');
+  const keyFilePath = await promptForInput('Private key file path: ');
 
-  if (!privateKey) {
-    logger.error('No private key provided. Setup cancelled.');
+  if (!keyFilePath) {
+    logger.error('No private key file path provided. Setup cancelled.');
     process.exit(1);
   }
 
-  // Reconstruct the key with proper ending if user typed END
-  const fullPrivateKey = privateKey.includes('-----END')
-    ? privateKey
-    : privateKey + '\n-----END RSA PRIVATE KEY-----';
+  let privateKey: string;
+  try {
+    privateKey = readPrivateKeyFile(keyFilePath.trim().replace(/['"]|\\$/g, ''));
+  } catch (error) {
+    logger.error((error as Error).message);
+    process.exit(1);
+  }
 
-  if (!isValidPrivateKey(fullPrivateKey)) {
+  if (!isValidPrivateKey(privateKey)) {
     logger.error('Invalid private key format.');
     logger.error('The key should start with "-----BEGIN RSA PRIVATE KEY-----"');
     logger.error('and end with "-----END RSA PRIVATE KEY-----"');
@@ -405,9 +396,9 @@ export async function setupAppCommand(options: SetupAppOptions): Promise<void> {
   const keySpinner = ora(`Setting GH_APP_PRIVATE_KEY as ${secretLocation}...`).start();
   try {
     if (isOrg) {
-      setOrgSecret(owner, 'GH_APP_PRIVATE_KEY', fullPrivateKey);
+      setOrgSecret(owner, 'GH_APP_PRIVATE_KEY', privateKey);
     } else {
-      setRepoSecret('GH_APP_PRIVATE_KEY', fullPrivateKey);
+      setRepoSecret('GH_APP_PRIVATE_KEY', privateKey);
     }
     keySpinner.succeed(`GH_APP_PRIVATE_KEY set as ${secretLocation}`);
   } catch (error) {
