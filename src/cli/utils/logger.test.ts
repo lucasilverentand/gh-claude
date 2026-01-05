@@ -18,7 +18,7 @@ describe('Logger', () => {
     it('should create logger with verbose disabled by default', () => {
       const logger = new Logger();
       expect(logger).toBeDefined();
-      
+
       // Debug should not log when verbose is false
       logger.debug('test message');
       expect(consoleLogSpy).not.toHaveBeenCalled();
@@ -27,7 +27,7 @@ describe('Logger', () => {
     it('should create logger with verbose enabled when true', () => {
       const logger = new Logger(true);
       expect(logger).toBeDefined();
-      
+
       // Debug should log when verbose is true
       logger.debug('test message');
       expect(consoleLogSpy).toHaveBeenCalled();
@@ -168,4 +168,3 @@ describe('Logger', () => {
     });
   });
 });
-
