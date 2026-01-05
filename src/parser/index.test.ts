@@ -76,7 +76,7 @@ No frontmatter here.`;
 
       const { agent, errors } = parser.parseContent(content, 'test.md');
 
-      expect(agent).toBeNull();
+      expect(agent).toBeUndefined();
       expect(errors.length).toBeGreaterThan(0);
       expect(errors.some((e) => e.severity === 'error')).toBe(true);
     });
@@ -91,7 +91,7 @@ Content`;
 
       const { agent, errors } = parser.parseContent(content, 'test.md');
 
-      expect(agent).toBeNull();
+      expect(agent).toBeUndefined();
       expect(errors.length).toBeGreaterThan(0);
       expect(errors.some((e) => e.field === 'frontmatter')).toBe(true);
     });
@@ -107,7 +107,7 @@ Content`;
 
       const { agent, errors } = parser.parseContent(content, 'test.md');
 
-      expect(agent).toBeNull();
+      expect(agent).toBeUndefined();
       expect(errors.some((e) => e.field.includes('name'))).toBe(true);
       expect(errors.some((e) => e.severity === 'error')).toBe(true);
     });
@@ -121,7 +121,7 @@ Content`;
 
       const { agent, errors } = parser.parseContent(content, 'test.md');
 
-      expect(agent).toBeNull();
+      expect(agent).toBeUndefined();
       expect(errors.some((e) => e.field.includes('on'))).toBe(true);
     });
 
@@ -137,7 +137,7 @@ Content`;
 
       const { agent, errors } = parser.parseContent(content, 'test.md');
 
-      expect(agent).toBeNull();
+      expect(agent).toBeUndefined();
       expect(errors.some((e) => e.field.includes('name'))).toBe(true);
     });
 
@@ -204,7 +204,9 @@ on:
 
       expect(agent).toBeDefined();
       expect(agent?.markdown).toBe('');
-      expect(errors).toHaveLength(0);
+      // Empty markdown generates a warning
+      expect(errors).toHaveLength(1);
+      expect(errors[0].severity).toBe('warning');
     });
   });
 
@@ -233,7 +235,7 @@ on:
       const errors = parser.validateAgent(agent);
 
       expect(errors.length).toBeGreaterThan(0);
-      expect(errors.some((e) => e.field === 'allowed-paths')).toBe(true);
+      expect(errors.some((e) => e.field === 'outputs')).toBe(true);
       expect(errors.some((e) => e.severity === 'error')).toBe(true);
     });
 
@@ -244,13 +246,13 @@ on:
         outputs: {
           'update-file': true,
         },
-        'allowed-paths': ['src/**/*.ts'],
+        allowed_paths: ['src/**/*.ts'],
         markdown: 'Instructions',
       };
 
       const errors = parser.validateAgent(agent);
 
-      const updateFileErrors = errors.filter((e) => e.field === 'allowed-paths');
+      const updateFileErrors = errors.filter((e) => e.field === 'outputs');
       expect(updateFileErrors).toHaveLength(0);
     });
 
@@ -270,7 +272,7 @@ on:
       const errors = parser.validateAgent(agent);
 
       expect(errors.length).toBeGreaterThan(0);
-      expect(errors.some((e) => e.field === 'permissions.contents')).toBe(true);
+      expect(errors.some((e) => e.field === 'permissions')).toBe(true);
       expect(errors.some((e) => e.severity === 'error')).toBe(true);
     });
 
@@ -289,7 +291,7 @@ on:
 
       const errors = parser.validateAgent(agent);
 
-      const permissionErrors = errors.filter((e) => e.field === 'permissions.contents');
+      const permissionErrors = errors.filter((e) => e.field === 'permissions');
       expect(permissionErrors).toHaveLength(0);
     });
 
@@ -303,14 +305,14 @@ on:
         permissions: {
           contents: 'read' as const,
         },
-        'allowed-paths': ['src/**'],
+        allowed_paths: ['src/**'],
         markdown: 'Instructions',
       };
 
       const errors = parser.validateAgent(agent);
 
       expect(errors.length).toBeGreaterThan(0);
-      expect(errors.some((e) => e.field === 'permissions.contents')).toBe(true);
+      expect(errors.some((e) => e.field === 'permissions')).toBe(true);
     });
 
     it('should return error when no triggers are specified', () => {
@@ -350,7 +352,7 @@ on:
 
   describe('parseFile', () => {
     it('should parse existing test fixture file', async () => {
-      const testFile = join(__dirname, '../../tests/fixtures/valid-agent.md');
+      const testFile = join(__dirname, '../../tests/fixtures/agents/valid-simple.md');
       const { agent, errors } = await parser.parseFile(testFile);
 
       expect(agent).toBeDefined();
@@ -360,7 +362,7 @@ on:
     it('should return error for non-existent file', async () => {
       const { agent, errors } = await parser.parseFile('/nonexistent/file.md');
 
-      expect(agent).toBeNull();
+      expect(agent).toBeUndefined();
       expect(errors.some((e) => e.severity === 'error')).toBe(true);
     });
   });
