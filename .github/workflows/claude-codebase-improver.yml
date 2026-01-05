@@ -1086,7 +1086,7 @@ jobs:
             fi
 
             # Check if we have an issue/PR number
-            ISSUE_NUMBER="${{ github.event.issue.number }}"
+            ISSUE_NUMBER="${{ github.event.issue.number }}${{ github.event.pull_request.number }}"
             if [ -z "$ISSUE_NUMBER" ]; then
               echo "- **add-label**: No issue or PR number available" >> /tmp/validation-errors/add-label.txt
               VALIDATION_FAILED=true
@@ -1250,7 +1250,7 @@ jobs:
             done
 
             # Post comment if we have issue/PR number
-            ISSUE_OR_PR_NUMBER="${{ github.event.issue.number }}"
+            ISSUE_OR_PR_NUMBER="${{ github.event.issue.number }}${{ github.event.pull_request.number }}"
             if [ -n "$ISSUE_OR_PR_NUMBER" ]; then
               echo -e "$ERROR_MSG" | gh api "repos/${{ github.repository }}/issues/$ISSUE_OR_PR_NUMBER/comments" \
                 -X POST \
