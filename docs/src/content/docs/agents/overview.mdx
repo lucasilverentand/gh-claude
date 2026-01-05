@@ -4,10 +4,16 @@ description: Explore the full range of Claude-powered agents you can create for 
 ---
 
 import { Card, CardGrid, Tabs, TabItem } from '@astrojs/starlight/components';
+import AgentGallery from '../../../components/AgentGallery/AgentGallery.astro';
+import '../../../styles/agent-gallery.css';
 
 # Agent Gallery
 
-gh-claude enables you to create intelligent automation agents that understand context, make decisions, and take action on your repository. This page showcases the types of agents you can build, from simple helpers to sophisticated workflows.
+gh-claude enables you to create intelligent automation agents that understand context, make decisions, and take action on your repository. Browse, search, and filter the agents below to find the perfect automation for your needs.
+
+<AgentGallery />
+
+---
 
 ## Agent Categories
 

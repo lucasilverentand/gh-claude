@@ -1,6 +1,7 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import starlightThemeRapide from 'starlight-theme-rapide';
+import react from '@astrojs/react';
 
 export default defineConfig({
   site: 'https://lucasilverentand.github.io',
@@ -134,5 +135,6 @@ export default defineConfig({
         },
       ],
     }),
+    react(),
   ],
 });
