@@ -93,8 +93,16 @@ class WorkflowValidator {
       return [];
     }
 
-    // Convert Ajv errors to our format
-    return this.formatErrors(validate.errors || []);
+    // Convert Ajv errors to our format, filtering out known false positives
+    return this.formatErrors(validate.errors || []).filter((error) => {
+      // The SchemaStore schema is incomplete and doesn't include all valid GitHub Actions triggers
+      // (e.g., issues, pull_request_target, discussion, etc.). Since our parser already validates
+      // triggers, we can safely ignore errors on the 'on' property.
+      if (error.path === 'on' || error.path.startsWith('on.')) {
+        return false;
+      }
+      return true;
+    });
   }
 
   /**

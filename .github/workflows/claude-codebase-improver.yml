@@ -27,7 +27,8 @@ jobs:
   pre-flight:
     runs-on: ubuntu-latest
     outputs:
-      should-run: ${{ steps.set-output.outputs.should-run }}
+      should-run: ${{ steps.set-output.outputs.should-run || steps.check-rate-limit.outputs.should-run }}
+      rate-limited: ${{ steps.check-rate-limit.outputs.rate-limited }}
     steps:
       - name: Initialize audit tracking
         id: init-audit
@@ -225,6 +226,14 @@ jobs:
         run: |-
           RATE_LIMIT_MINUTES=1
 
+          # Bypass rate limit for manual workflow_dispatch runs
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "✓ Manual run - bypassing rate limit check"
+            jq '.rate_limit_check = true' /tmp/audit/validation-status.json > /tmp/audit/validation-status.tmp
+            mv /tmp/audit/validation-status.tmp /tmp/audit/validation-status.json
+            exit 0
+          fi
+
           # Get recent workflow runs for this workflow
           # Note: Using repo-level runs endpoint and filtering by workflow name to avoid URL encoding issues
           RECENT_RUNS=$(gh api "repos/${{ github.repository }}/actions/runs" \
@@ -238,18 +247,10 @@ jobs:
               TIME_DIFF=$(( (CURRENT_TIME - RUN_TIMESTAMP) / 60 ))
 
               if [ "${TIME_DIFF}" -lt "${RATE_LIMIT_MINUTES}" ]; then
-                echo "::warning::Rate limit: Agent ran ${TIME_DIFF} minutes ago. Minimum interval is ${RATE_LIMIT_MINUTES} minutes."
-                # Track rate limit issue
-                jq '. += [{
-                  "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'",
-                  "issue_type": "rate_limit",
-                  "severity": "warning",
-                  "message": "Rate limit exceeded",
-                  "context": {"time_since_last_run": "'${TIME_DIFF}'", "minimum_interval": "'${RATE_LIMIT_MINUTES}'"}
-                }]' /tmp/audit/permission-issues.json > /tmp/audit/permission-issues.tmp
-                mv /tmp/audit/permission-issues.tmp /tmp/audit/permission-issues.json
-                echo "validation-failed=true" >> $GITHUB_OUTPUT
-                exit 1
+                echo "::notice::Rate limit: Agent ran ${TIME_DIFF} minutes ago. Minimum interval is ${RATE_LIMIT_MINUTES} minutes. Skipping execution."
+                echo "should-run=false" >> $GITHUB_OUTPUT
+                echo "rate-limited=true" >> $GITHUB_OUTPUT
+                exit 0
               fi
             done
           fi
@@ -871,7 +872,7 @@ jobs:
           echo "git-user=$APP_SLUG[bot]" >> $GITHUB_OUTPUT
           echo "git-email=$APP_ID_NUM+$APP_SLUG[bot]@users.noreply.github.com" >> $GITHUB_OUTPUT
       - name: Download outputs artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           name: agent-outputs
           path: /tmp/outputs
@@ -1132,7 +1133,7 @@ jobs:
     if: always()
     steps:
       - name: Download all validation results
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           pattern: validation-results-*
           path: /tmp/all-validation-errors
@@ -1274,19 +1275,19 @@ jobs:
     if: always()
     steps:
       - name: Download validation audit
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           name: validation-audit
           path: /tmp/audit-data/validation
         continue-on-error: true
       - name: Download execution metrics
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           name: audit-metrics
           path: /tmp/audit-data/metrics
         continue-on-error: true
       - name: Download output validation results
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           pattern: validation-results-*
           path: /tmp/audit-data/outputs
@@ -1295,6 +1296,14 @@ jobs:
       - name: Generate audit report and check status
         id: audit-check
         run: |
+
+          # Check if run was rate-limited (not a failure, just skipped)
+          RATE_LIMITED="${{ needs.pre-flight.outputs.rate-limited }}"
+          if [ "$RATE_LIMITED" = "true" ]; then
+            echo "⏭️ Agent run was rate-limited. This is expected behavior, not a failure."
+            echo "has-failures=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
 
           # Initialize failure tracking
           HAS_FAILURES="false"

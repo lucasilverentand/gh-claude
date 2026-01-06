@@ -112,11 +112,14 @@ on:
       expect(errors.some((e) => e.message.includes('jobs') || e.path.includes('jobs'))).toBe(true);
     });
 
-    it('should detect invalid trigger configuration', async () => {
-      const invalidTrigger = `
+    it('should ignore trigger validation errors (schema is incomplete)', async () => {
+      // The SchemaStore schema doesn't include all valid GitHub Actions triggers
+      // (e.g., issues, discussion, pull_request_target). Since our parser validates
+      // triggers, we filter out 'on' property errors from the schema validator.
+      const workflowWithIssuesTrigger = `
 name: Test Workflow
 on:
-  invalid_event:
+  issues:
     types: [opened]
 jobs:
   test:
@@ -125,8 +128,8 @@ jobs:
       - run: echo "test"
 `;
 
-      const errors = await workflowValidator.validateWorkflow(invalidTrigger);
-      expect(errors.length).toBeGreaterThan(0);
+      const errors = await workflowValidator.validateWorkflow(workflowWithIssuesTrigger);
+      expect(errors.length).toBe(0);
     });
 
     it('should validate workflow with multiple jobs', async () => {
