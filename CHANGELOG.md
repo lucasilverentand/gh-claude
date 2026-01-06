@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0](https://github.com/lucasilverentand/gh-claude/compare/v0.4.1...v0.5.0) (2026-01-06)
+
+
+### Features
+
+* add interactive Agent Gallery component to documentation ([#103](https://github.com/lucasilverentand/gh-claude/issues/103)) ([c60049c](https://github.com/lucasilverentand/gh-claude/commit/c60049cf11ec8eef7034bb69420d9e9ac68f243e))
+
+
+### Bug Fixes
+
+* allow GitHub App bot to trigger Issue Triage agent ([#106](https://github.com/lucasilverentand/gh-claude/issues/106)) ([45f97cb](https://github.com/lucasilverentand/gh-claude/commit/45f97cb98199dcf364f9c5d8ff8752f80f05f73b))
+* correct README badge URLs to match workflow names ([a357657](https://github.com/lucasilverentand/gh-claude/commit/a3576572ba4a12ba4ff1fdbec86aa3ef41f6712a))
+* handle rate limiting gracefully in audit-report job ([473e634](https://github.com/lucasilverentand/gh-claude/commit/473e6343bf15a543c4eaf9cfa5a223cec0d730d4))
+* ignore trigger validation errors from incomplete SchemaStore schema ([bd96054](https://github.com/lucasilverentand/gh-claude/commit/bd960545271774c1b69b75ae8d51b426ec3a313e))
+* validate cached schema to prevent using stale/corrupted cache ([47441a6](https://github.com/lucasilverentand/gh-claude/commit/47441a652b8fb385a41defb242721fb48a70caaa))
+
 ## [0.4.1](https://github.com/lucasilverentand/gh-claude/compare/v0.4.0...v0.4.1) (2026-01-05)
 
 
