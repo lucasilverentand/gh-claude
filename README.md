@@ -1,8 +1,8 @@
 # gh-claude
 
 [![Build & Test](https://github.com/lucasilverentand/gh-claude/actions/workflows/ci.yml/badge.svg)](https://github.com/lucasilverentand/gh-claude/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/lucasilverentand/gh-claude/branch/main/graph/badge.svg)](https://codecov.io/gh/lucasilverentand/gh-claude)
-[![Docs](https://github.com/lucasilverentand/gh-claude/workflows/Deploy%20Docs/badge.svg)](https://lucasilverentand.github.io/gh-claude)
+[![Release Please](https://github.com/lucasilverentand/gh-claude/actions/workflows/release-please.yml/badge.svg)](https://github.com/lucasilverentand/gh-claude/actions/workflows/release-please.yml)
+[![Docs](https://github.com/lucasilverentand/gh-claude/actions/workflows/deploy-docs.yml/badge.svg)](https://lucasilverentand.github.io/gh-claude)
 
 A GitHub CLI extension that transforms natural language markdown files into GitHub Actions workflows powered by Claude AI.
 
