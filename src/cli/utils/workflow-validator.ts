@@ -28,6 +28,31 @@ class WorkflowValidator {
   }
 
   /**
+   * Validate that a cached schema looks like the real SchemaStore schema.
+   * This prevents using corrupted or placeholder schemas.
+   */
+  private isValidSchema(schema: unknown): boolean {
+    if (typeof schema !== 'object' || schema === null) return false;
+    const s = schema as Record<string, unknown>;
+
+    // Check for key indicators of the real SchemaStore schema
+    // The real schema has definitions with many events, not just a few
+    const definitions = s.definitions as Record<string, unknown> | undefined;
+    if (!definitions) return false;
+
+    const event = definitions.event as Record<string, unknown> | undefined;
+    if (!event) return false;
+
+    // The real schema has 30+ events in the enum
+    const eventEnum = event.enum as string[] | undefined;
+    if (!eventEnum || eventEnum.length < 20) return false;
+
+    // Check for some specific events that should be present
+    const requiredEvents = ['issues', 'pull_request', 'push', 'workflow_dispatch', 'discussion'];
+    return requiredEvents.every((e) => eventEnum.includes(e));
+  }
+
+  /**
    * Fetch the GitHub workflow schema from SchemaStore.
    * Uses a local cache to avoid repeated network requests.
    */
@@ -39,8 +64,14 @@ class WorkflowValidator {
     // Try to load from cache first
     try {
       const cached = await readFile(SCHEMA_CACHE_PATH, 'utf-8');
-      this.schema = JSON.parse(cached) as object;
-      return this.schema;
+      const parsedCache = JSON.parse(cached) as object;
+
+      // Validate the cached schema is the real SchemaStore schema
+      if (this.isValidSchema(parsedCache)) {
+        this.schema = parsedCache;
+        return this.schema;
+      }
+      // Invalid cache, will fetch fresh below
     } catch {
       // Cache miss or read error, fetch from network
     }
@@ -93,16 +124,8 @@ class WorkflowValidator {
       return [];
     }
 
-    // Convert Ajv errors to our format, filtering out known false positives
-    return this.formatErrors(validate.errors || []).filter((error) => {
-      // The SchemaStore schema is incomplete and doesn't include all valid GitHub Actions triggers
-      // (e.g., issues, pull_request_target, discussion, etc.). Since our parser already validates
-      // triggers, we can safely ignore errors on the 'on' property.
-      if (error.path === 'on' || error.path.startsWith('on.')) {
-        return false;
-      }
-      return true;
-    });
+    // Convert Ajv errors to our format
+    return this.formatErrors(validate.errors || []);
   }
 
   /**
