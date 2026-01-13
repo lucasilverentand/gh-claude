@@ -16,12 +16,19 @@ gh claude init --examples
 
 This creates:
 - `.github/claude-agents/` - Directory for agent markdown files
-- `.github/claude.yml` - Configuration file
-- Example agent templates
+- Example agent templates to help you get started
 
 ## 2. Configure Authentication
 
-Set up Claude API access (if not already done during [installation](/gh-claude/getting-started/installation/#authentication)):
+Run the interactive setup wizard:
+
+```bash
+gh claude setup
+```
+
+This guides you through Claude API authentication and optional GitHub App setup.
+
+Alternatively, configure just the API key:
 
 ```bash
 gh claude setup-token
@@ -55,15 +62,19 @@ Analyze new issues and:
 Be helpful and welcoming!
 ```
 
-## 4. Compile to Workflow
+## 4. Compile to Workflows
 
-Generate the GitHub Actions workflow:
+Generate GitHub Actions workflows from all your agents:
 
 ```bash
-gh claude compile --all
+gh claude compile
 ```
 
-This creates `.github/workflows/claude-issue-triage.yml` with the complete workflow definition.
+This creates:
+- `.github/workflows/claude-dispatcher.yml` - Central dispatcher that handles all triggers
+- `.github/workflows/claude-issue-triage.yml` - Your issue triage agent workflow
+
+**What's the dispatcher?** It's a centralized workflow that aggregates all triggers, validates configuration, and routes events to the appropriate agents.
 
 ## 5. Commit and Deploy
 
@@ -81,8 +92,19 @@ Create a new issue in your repository. The agent should automatically:
 - Add appropriate labels
 - Post a welcoming comment
 
+Check the **Actions** tab to see the workflow execution and logs.
+
+## Understanding the Dispatcher
+
+The dispatcher pattern provides:
+- **Shared validation**: API keys and permissions checked once
+- **Self-healing**: Creates issues and disables itself if misconfigured
+- **Efficient routing**: Only runs agents that match the event
+- **Centralized triggers**: All event subscriptions in one place
+
 ## What's Next?
 
 - Learn about [Agent Definition](../../guide/agent-definition/) format
+- Understand [How It Works](../../guide/how-it-works/) with the dispatcher architecture
 - Explore [Triggers](../../triggers/) for different events
 - See more [Examples](../../examples/issue-triage/)
