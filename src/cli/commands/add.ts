@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, copyFileSync, existsSync, mkdirSync } from 'fs';
 import { join, resolve } from 'path';
 import { logger } from '../utils/logger';
-import * as readline from 'readline';
+import { promptForInput } from '../utils/prompts';
 import matter from 'gray-matter';
 
 interface AddOptions {
@@ -16,32 +16,13 @@ interface AgentInfo {
 }
 
 /**
- * Prompts the user for input
- */
-function promptForInput(question: string): Promise<string> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
-  return new Promise((resolve) => {
-    rl.question(question, (answer) => {
-      rl.close();
-      resolve(answer.trim());
-    });
-  });
-}
-
-/**
  * Gets the list of available agents from the examples directory
  */
 function getAvailableAgents(examplesDir: string): AgentInfo[] {
   const agents: AgentInfo[] = [];
 
   try {
-    const files = readdirSync(examplesDir).filter(
-      (f) => f.endsWith('.md') && f !== 'README.md'
-    );
+    const files = readdirSync(examplesDir).filter((f) => f.endsWith('.md') && f !== 'README.md');
 
     for (const filename of files) {
       const filePath = join(examplesDir, filename);
@@ -145,13 +126,14 @@ function copyAgents(
   for (const filename of filenames) {
     const sourcePath = join(examplesDir, filename);
     const targetPath = join(targetDir, filename);
+    const fileExisted = existsSync(targetPath);
 
-    if (existsSync(targetPath) && !force) {
+    if (fileExisted && !force) {
       skipped.push(filename);
     } else {
       try {
         copyFileSync(sourcePath, targetPath);
-        if (existsSync(targetPath)) {
+        if (fileExisted) {
           overwritten.push(filename);
         } else {
           copied.push(filename);

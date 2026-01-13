@@ -1,7 +1,6 @@
 import { execSync } from 'child_process';
-import ora from 'ora';
 import { logger } from '../utils/logger';
-import * as readline from 'readline';
+import { promptForInput } from '../utils/prompts';
 import { authCommand } from './auth';
 import { setupAppCommand } from './setup-app';
 
@@ -9,23 +8,6 @@ interface SetupOptions {
   force?: boolean;
   skipAuth?: boolean;
   skipApp?: boolean;
-}
-
-/**
- * Prompts the user for input
- */
-function promptForInput(question: string): Promise<string> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
-  return new Promise((resolve) => {
-    rl.question(question, (answer) => {
-      rl.close();
-      resolve(answer.trim());
-    });
-  });
 }
 
 /**
@@ -219,7 +201,7 @@ export async function setupCommand(options: SetupOptions): Promise<void> {
   logger.info('Step 4/4: Next steps');
   logger.newline();
 
-  logger.success('Setup complete! Here\'s what to do next:');
+  logger.success("Setup complete! Here's what to do next:");
   logger.newline();
 
   logger.info('1. Create or add Claude agents:');
