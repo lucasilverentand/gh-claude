@@ -9,7 +9,6 @@ permissions:
   pull_requests: read
   contents: read
 outputs:
-  add-comment: true
   create-issue: true
 inputs:
   workflow_runs:
