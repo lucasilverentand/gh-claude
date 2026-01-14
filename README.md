@@ -42,18 +42,15 @@ Welcome the contributor with a friendly message!
 ## Quick Start
 
 ```bash
-# Install via npm/bun
-npm install -g repo-agents
-# or
-bun install -g repo-agents
+# Run directly with npx (no install required)
+npx @repo-agents/cli init --examples
+npx @repo-agents/cli setup
+npx @repo-agents/cli compile
 
-# Initialize in your repository
+# Or install globally first
+npm install -g @repo-agents/cli
 repo-agents init --examples
-
-# Set up authentication
 repo-agents setup
-
-# Compile agents to workflows
 repo-agents compile
 
 # Commit and push

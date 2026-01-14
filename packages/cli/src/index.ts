@@ -17,7 +17,7 @@ const program = new Command();
 program
   .name('repo-agents')
   .description(
-    'GitHub CLI extension for creating AI-powered GitHub Actions workflows from markdown agent definitions'
+    'CLI tool for creating AI-powered GitHub Actions workflows from markdown agent definitions'
   )
   .version(packageJson.version);
 

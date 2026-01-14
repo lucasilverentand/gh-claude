@@ -1,7 +1,7 @@
 ---
 title: Installation
 slug: install
-description: Step-by-step guide to install Repo Agents GitHub CLI extension
+description: Step-by-step guide to install Repo Agents CLI
 next: ../quick-start
 ---
 
@@ -9,29 +9,43 @@ next: ../quick-start
 
 Before installing Repo Agents, ensure you have:
 
-- **Node.js 20.0.0 or higher**
-- **GitHub CLI** (`gh`) installed and authenticated
+- **Node.js 18.0.0 or higher** (or Bun)
+- **GitHub CLI** (`gh`) installed and authenticated (used for GitHub operations)
 - An **Anthropic API key** for Claude
 
-## Installing
+## Usage
 
-Install Repo Agents via npm or bun:
+Run Repo Agents directly with npx or bunx (no installation required):
 
 ```bash
-npm install -g repo-agents
+npx @repo-agents/cli init
 # or
-bun install -g repo-agents
+bunx @repo-agents/cli init
 ```
 
-## Verify Installation
+### Global Installation (Optional)
 
-Check that the extension is installed:
+If you prefer a global install:
 
 ```bash
-repo-agents --version
+npm install -g @repo-agents/cli
+# or
+bun install -g @repo-agents/cli
 ```
 
-You should see the version number displayed.
+Then run commands directly:
+
+```bash
+repo-agents init
+```
+
+## Verify
+
+Check the CLI version:
+
+```bash
+npx @repo-agents/cli --version
+```
 
 ## Authentication
 

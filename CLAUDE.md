@@ -72,7 +72,6 @@ bun run format             # Prettier formatting
 ```bash
 bun run dev                # TypeScript watch mode
 bun dist/index.js          # Run CLI locally after build
-gh extension install .     # Install as gh extension locally
 ```
 
 ### Documentation Site
