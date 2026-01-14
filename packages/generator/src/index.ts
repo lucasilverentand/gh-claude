@@ -163,54 +163,10 @@ export class WorkflowGenerator {
       );
     }
 
-    // Pre-flight job
-    workflow.jobs['pre-flight'] = {
-      'runs-on': 'ubuntu-latest',
-      outputs: {
-        'should-run': ghExpr('steps.run.outputs.should-run'),
-        'rate-limited': ghExpr('steps.run.outputs.rate-limited'),
-      },
-      steps: [
-        {
-          uses: 'actions/checkout@v4',
-        },
-        {
-          uses: 'oven-sh/setup-bun@v2',
-        },
-        {
-          name: 'Download dispatch context',
-          uses: 'actions/download-artifact@v4',
-          with: {
-            name: `dispatch-context-${ghExpr('inputs.context-run-id')}`,
-            path: '/tmp/dispatch-context/',
-          },
-        },
-        {
-          id: 'run',
-          run: `${cliCommand} run pre-flight --agent ${agentFilePath}`,
-          env: {
-            ANTHROPIC_API_KEY: ghExpr('secrets.ANTHROPIC_API_KEY'),
-            CLAUDE_CODE_OAUTH_TOKEN: ghExpr('secrets.CLAUDE_CODE_OAUTH_TOKEN'),
-            GH_TOKEN: ghExpr('secrets.GITHUB_TOKEN'),
-          },
-        },
-        {
-          uses: 'actions/upload-artifact@v4',
-          if: 'always()',
-          with: {
-            name: `validation-audit-${ghExpr('github.run_id')}`,
-            path: '/tmp/artifacts/validation-audit/',
-          },
-        },
-      ],
-    };
-
     // Collect-context job (only if context is configured)
     if (hasContext) {
       workflow.jobs['collect-context'] = {
         'runs-on': 'ubuntu-latest',
-        needs: 'pre-flight',
-        if: "needs.pre-flight.outputs.should-run == 'true'",
         outputs: {
           'has-context': ghExpr('steps.run.outputs.has-context'),
         },
@@ -240,10 +196,10 @@ export class WorkflowGenerator {
     }
 
     // Claude-agent job
-    const claudeAgentNeeds = hasContext ? ['pre-flight', 'collect-context'] : ['pre-flight'];
+    const claudeAgentNeeds = hasContext ? ['collect-context'] : undefined;
     const claudeAgentIf = hasContext
-      ? "needs.pre-flight.outputs.should-run == 'true' && needs.collect-context.outputs.has-context == 'true'"
-      : "needs.pre-flight.outputs.should-run == 'true'";
+      ? "needs.collect-context.outputs.has-context == 'true'"
+      : undefined;
 
     const claudeAgentSteps: WorkflowStep[] = [
       {
@@ -301,12 +257,17 @@ export class WorkflowGenerator {
       }
     );
 
-    workflow.jobs['claude-agent'] = {
+    const claudeAgentJob: GitHubWorkflowJob = {
       'runs-on': 'ubuntu-latest',
-      needs: claudeAgentNeeds,
-      if: claudeAgentIf,
       steps: claudeAgentSteps,
     };
+    if (claudeAgentNeeds) {
+      claudeAgentJob.needs = claudeAgentNeeds;
+    }
+    if (claudeAgentIf) {
+      claudeAgentJob.if = claudeAgentIf;
+    }
+    workflow.jobs['claude-agent'] = claudeAgentJob;
 
     // Execute-outputs job (only if outputs are configured)
     if (hasOutputs) {
@@ -346,15 +307,14 @@ export class WorkflowGenerator {
     // Audit-report job (always present)
     const auditNeeds = hasContext
       ? hasOutputs
-        ? ['pre-flight', 'collect-context', 'claude-agent', 'execute-outputs']
-        : ['pre-flight', 'collect-context', 'claude-agent']
+        ? ['collect-context', 'claude-agent', 'execute-outputs']
+        : ['collect-context', 'claude-agent']
       : hasOutputs
-        ? ['pre-flight', 'claude-agent', 'execute-outputs']
-        : ['pre-flight', 'claude-agent'];
+        ? ['claude-agent', 'execute-outputs']
+        : ['claude-agent'];
 
     const auditRunParts: string[] = [
       `${cliCommand} run audit --agent ${agentFilePath}`,
-      `--pre-flight-result ${ghExpr('needs.pre-flight.result')}`,
     ];
 
     if (hasContext) {
@@ -366,11 +326,6 @@ export class WorkflowGenerator {
     if (hasOutputs) {
       auditRunParts.push(`--execute-outputs-result ${ghExpr('needs.execute-outputs.result')}`);
     }
-
-    // Add rate-limited flag conditionally
-    const rateLimitedFlag = ghExpr(
-      "needs.pre-flight.outputs.rate-limited == 'true' && '--rate-limited' || ''"
-    );
 
     workflow.jobs['audit-report'] = {
       'runs-on': 'ubuntu-latest',
@@ -393,7 +348,7 @@ export class WorkflowGenerator {
           'continue-on-error': true,
         },
         {
-          run: `${auditRunParts.join(' \\\n            ')} \\\n            ${rateLimitedFlag}`,
+          run: auditRunParts.join(' \\\n            '),
           env: {
             GH_TOKEN: ghExpr('secrets.GITHUB_TOKEN'),
           },

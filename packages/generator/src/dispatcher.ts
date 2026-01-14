@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import yaml from 'js-yaml';
 import type {
   AgentDefinition,
@@ -7,6 +10,16 @@ import type {
   TriggerEventType,
 } from '@repo-agents/types';
 import { agentNameToWorkflowName } from '@repo-agents/cli-utils';
+
+// Read package.json version at module load time
+let packageVersion = '0.4.1'; // fallback
+try {
+  const packageJsonPath = join(__dirname, '../package.json');
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
+  packageVersion = packageJson.version;
+} catch {
+  // Use fallback version if reading fails
+}
 
 interface DispatcherWorkflowJob {
   'runs-on': string;
@@ -106,6 +119,24 @@ export class DispatcherGenerator {
   }
 
   /**
+   * Get the relative path to an agent markdown file from the repository root.
+   */
+  private getAgentFilePath(agentName: string): string {
+    const fileName = agentName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+    return `.github/agents/${fileName}.md`;
+  }
+
+  /**
+   * Get the major version for package pinning.
+   */
+  private getMajorVersion(): string {
+    return packageVersion.split('.')[0];
+  }
+
+  /**
    * Generate routing rules that map events to agent workflows.
    */
   generateRoutingTable(agents: AgentDefinition[]): RoutingRule[] {
@@ -114,6 +145,7 @@ export class DispatcherGenerator {
     for (const agent of agents) {
       const rule: RoutingRule = {
         agentName: agent.name,
+        agentPath: this.getAgentFilePath(agent.name),
         workflowFile: `${agentNameToWorkflowName(agent.name)}.yml`,
         triggers: [],
       };
@@ -609,6 +641,10 @@ fi`,
   }
 
   private generateDispatchJob(): DispatcherWorkflowJob {
+    const majorVersion = this.getMajorVersion();
+    const cliCommand = `bunx repo-agent@${majorVersion}`;
+    const ghExpr = (expr: string) => '$' + `{{ ${expr} }}`;
+
     return {
       'runs-on': 'ubuntu-latest',
       needs: ['pre-flight', 'prepare-context', 'route-event'],
@@ -621,18 +657,57 @@ fi`,
       },
       steps: [
         {
-          name: 'Dispatch to ${{ matrix.agent.agentName }}',
-          env: {
-            GH_TOKEN: '${{ needs.pre-flight.outputs.app-token }}',
+          uses: 'actions/checkout@v4',
+        },
+        {
+          uses: 'oven-sh/setup-bun@v2',
+        },
+        {
+          name: 'Download dispatch context',
+          uses: 'actions/download-artifact@v4',
+          with: {
+            name: `dispatch-context-${ghExpr('needs.prepare-context.outputs.run-id')}`,
+            path: '/tmp/dispatch-context/',
           },
-          run: `echo "Triggering workflow: \${{ matrix.agent.workflowFile }}"
-echo "Agent: \${{ matrix.agent.agentName }}"
+        },
+        {
+          name: `Run pre-flight for ${ghExpr('matrix.agent.agentName')}`,
+          id: 'pre-flight-check',
+          run: `${cliCommand} run pre-flight --agent ${ghExpr('matrix.agent.agentPath')}`,
+          env: {
+            ANTHROPIC_API_KEY: ghExpr('secrets.ANTHROPIC_API_KEY'),
+            CLAUDE_CODE_OAUTH_TOKEN: ghExpr('secrets.CLAUDE_CODE_OAUTH_TOKEN'),
+            GH_TOKEN: ghExpr('secrets.GITHUB_TOKEN'),
+          },
+        },
+        {
+          name: 'Upload validation audit',
+          uses: 'actions/upload-artifact@v4',
+          if: 'always()',
+          with: {
+            name: `validation-audit-${ghExpr('matrix.agent.agentName')}-${ghExpr('github.run_id')}`,
+            path: '/tmp/artifacts/validation-audit/',
+          },
+        },
+        {
+          name: `Dispatch to ${ghExpr('matrix.agent.agentName')}`,
+          if: "steps.pre-flight-check.outputs.should-run == 'true'",
+          env: {
+            GH_TOKEN: ghExpr('needs.pre-flight.outputs.app-token'),
+          },
+          run: `echo "Triggering workflow: ${ghExpr('matrix.agent.workflowFile')}"
+echo "Agent: ${ghExpr('matrix.agent.agentName')}"
 
-gh workflow run "\${{ matrix.agent.workflowFile }}" \\
-  --ref "\${{ github.ref }}" \\
-  -f context-run-id="\${{ needs.prepare-context.outputs.run-id }}"
+gh workflow run "${ghExpr('matrix.agent.workflowFile')}" \\
+  --ref "${ghExpr('github.ref')}" \\
+  -f context-run-id="${ghExpr('needs.prepare-context.outputs.run-id')}"
 
-echo "✓ Dispatched to \${{ matrix.agent.agentName }}"`,
+echo "✓ Dispatched to ${ghExpr('matrix.agent.agentName')}"`,
+        },
+        {
+          name: 'Skip notification',
+          if: "steps.pre-flight-check.outputs.should-run != 'true'",
+          run: `echo "::notice::Skipping ${ghExpr('matrix.agent.agentName')}: ${ghExpr('steps.pre-flight-check.outputs.skip-reason || \'Pre-flight check failed\'')}"`,
         },
       ],
     };

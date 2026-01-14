@@ -344,6 +344,7 @@ export type TriggerEventType =
 
 export interface RoutingRule {
   agentName: string;
+  agentPath: string; // Path to agent markdown file (e.g., .github/agents/triage.md)
   workflowFile: string;
   triggers: Array<{
     eventType: TriggerEventType;
