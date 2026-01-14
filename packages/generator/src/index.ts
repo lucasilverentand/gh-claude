@@ -313,9 +313,7 @@ export class WorkflowGenerator {
         ? ['claude-agent', 'execute-outputs']
         : ['claude-agent'];
 
-    const auditRunParts: string[] = [
-      `${cliCommand} run audit --agent ${agentFilePath}`,
-    ];
+    const auditRunParts: string[] = [`${cliCommand} run audit --agent ${agentFilePath}`];
 
     if (hasContext) {
       auditRunParts.push(`--collect-context-result ${ghExpr('needs.collect-context.result')}`);

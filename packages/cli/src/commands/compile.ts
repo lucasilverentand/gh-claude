@@ -132,9 +132,7 @@ export async function compileCommand(options: CompileOptions): Promise<void> {
     const agentSpinner = ora(`Generating ${chalk.cyan(agent.name)} workflow...`).start();
 
     // Get relative path from cwd for the agent file
-    const relativeAgentPath = filePath.startsWith(cwd)
-      ? filePath.slice(cwd.length + 1)
-      : filePath;
+    const relativeAgentPath = filePath.startsWith(cwd) ? filePath.slice(cwd.length + 1) : filePath;
 
     const agentWorkflow = workflowGenerator.generate(agent, relativeAgentPath);
 

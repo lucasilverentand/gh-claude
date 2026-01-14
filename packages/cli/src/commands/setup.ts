@@ -1,7 +1,11 @@
 import { execSync } from 'child_process';
 import { logger } from '@repo-agents/cli-utils/logger';
 import { promptForInput } from '@repo-agents/cli-utils/prompts';
-import { getExistingSecrets, getExistingAppSecrets, isGhAuthenticated } from '@repo-agents/cli-utils/secrets';
+import {
+  getExistingSecrets,
+  getExistingAppSecrets,
+  isGhAuthenticated,
+} from '@repo-agents/cli-utils/secrets';
 import { authCommand } from './auth';
 import { setupAppCommand } from './setup-app';
 

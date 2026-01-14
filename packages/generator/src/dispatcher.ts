@@ -707,7 +707,7 @@ echo "✓ Dispatched to ${ghExpr('matrix.agent.agentName')}"`,
         {
           name: 'Skip notification',
           if: "steps.pre-flight-check.outputs.should-run != 'true'",
-          run: `echo "::notice::Skipping ${ghExpr('matrix.agent.agentName')}: ${ghExpr('steps.pre-flight-check.outputs.skip-reason || \'Pre-flight check failed\'')}"`,
+          run: `echo "::notice::Skipping ${ghExpr('matrix.agent.agentName')}: ${ghExpr("steps.pre-flight-check.outputs.skip-reason || 'Pre-flight check failed'")}"`,
         },
       ],
     };
