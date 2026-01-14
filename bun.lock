@@ -41,6 +41,7 @@
         "@repo-agents/parser": "workspace:*",
         "@repo-agents/types": "workspace:*",
         "commander": "^14.0.2",
+        "gray-matter": "^4.0.3",
         "ora": "^9.0.0",
       },
       "devDependencies": {
