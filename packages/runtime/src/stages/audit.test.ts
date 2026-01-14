@@ -27,7 +27,6 @@ You are a test agent. Please analyze the issue and provide a helpful response.
     eventPath: '',
     agentPath,
     jobStatuses: {
-      preFlight: 'success' as const,
       claudeAgent: 'success' as const,
     },
     ...overrides,
@@ -84,7 +83,6 @@ You are a test agent. Please analyze the issue and provide a helpful response.
       const result = await runAudit({
         ...createContext(),
         jobStatuses: {
-          preFlight: 'success' as const,
           claudeAgent: 'skipped' as const,
           rateLimited: true,
         },
@@ -97,20 +95,8 @@ You are a test agent. Please analyze the issue and provide a helpful response.
   });
 
   describe('failure detection', () => {
-    it('should detect pre-flight failures', async () => {
-      const { runAudit } = await import('./audit');
-
-      const result = await runAudit({
-        ...createContext(),
-        jobStatuses: {
-          preFlight: 'failure' as const,
-          claudeAgent: 'skipped' as const,
-        },
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.outputs['has-failures']).toBe('true');
-    });
+    // Note: Pre-flight checks now run in the dispatcher, not in agent workflows.
+    // The agent workflow audit stage only tracks claude-agent and execute-outputs jobs.
 
     it('should detect claude-agent failures', async () => {
       const { runAudit } = await import('./audit');
@@ -118,7 +104,6 @@ You are a test agent. Please analyze the issue and provide a helpful response.
       const result = await runAudit({
         ...createContext(),
         jobStatuses: {
-          preFlight: 'success' as const,
           claudeAgent: 'failure' as const,
         },
       });
@@ -133,7 +118,6 @@ You are a test agent. Please analyze the issue and provide a helpful response.
       const result = await runAudit({
         ...createContext(),
         jobStatuses: {
-          preFlight: 'success' as const,
           claudeAgent: 'success' as const,
           executeOutputs: 'failure' as const,
         },
@@ -149,7 +133,6 @@ You are a test agent. Please analyze the issue and provide a helpful response.
       const result = await runAudit({
         ...createContext(),
         jobStatuses: {
-          preFlight: 'success' as const,
           claudeAgent: 'skipped' as const,
           executeOutputs: 'skipped' as const,
         },

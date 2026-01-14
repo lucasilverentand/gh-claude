@@ -39,10 +39,9 @@ export interface StageContext {
 
 /**
  * Status of each job in the workflow, passed to audit stage.
+ * Note: Pre-flight checks run in the dispatcher, not in agent workflows.
  */
 export interface JobStatuses {
-  /** Result of the pre-flight job */
-  preFlight?: JobResult;
   /** Result of the claude-agent job */
   claudeAgent?: JobResult;
   /** Result of the execute-outputs job */

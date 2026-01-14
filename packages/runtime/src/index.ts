@@ -30,7 +30,7 @@ interface RunOptions {
   outputType?: string;
   dispatchRunId?: string;
   // Job status options for audit stage
-  preFlightResult?: JobResult;
+  // Note: Pre-flight results are not tracked here since pre-flight runs in the dispatcher
   claudeAgentResult?: JobResult;
   executeOutputsResult?: JobResult;
   collectContextResult?: JobResult;
@@ -43,7 +43,6 @@ program
   .requiredOption('--agent <path>', 'Path to agent definition markdown file')
   .option('--output-type <type>', 'Output type to execute (for outputs stage)')
   .option('--dispatch-run-id <id>', 'Dispatcher run ID (for dispatcher mode)')
-  .option('--pre-flight-result <result>', 'Result of pre-flight job (for audit stage)')
   .option('--claude-agent-result <result>', 'Result of claude-agent job (for audit stage)')
   .option('--execute-outputs-result <result>', 'Result of execute-outputs job (for audit stage)')
   .option('--collect-context-result <result>', 'Result of collect-context job (for audit stage)')
@@ -65,7 +64,6 @@ program
       outputType: options.outputType,
       dispatchRunId: options.dispatchRunId,
       jobStatuses: {
-        preFlight: options.preFlightResult,
         claudeAgent: options.claudeAgentResult,
         executeOutputs: options.executeOutputsResult,
         collectContext: options.collectContextResult,

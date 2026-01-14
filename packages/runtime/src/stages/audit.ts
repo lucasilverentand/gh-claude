@@ -9,17 +9,23 @@
  * 5. Create a GitHub issue for failures (if configured)
  */
 
-import { readFile, writeFile, mkdir, readdir } from 'fs/promises';
-import { existsSync } from 'fs';
-import { join } from 'path';
-import { $ } from 'bun';
-import type { Stage, StageResult, StageContext } from '../types';
-import type { AgentDefinition, ClaudeExecutionMetrics, PermissionIssue } from '@repo-agents/types';
+import { existsSync } from 'node:fs';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
 import { agentParser } from '@repo-agents/parser';
+import type { AgentDefinition, ClaudeExecutionMetrics, PermissionIssue } from '@repo-agents/types';
+import { $ } from 'bun';
+
+import type { Stage, StageContext, StageResult } from '../types';
 
 /** Paths where audit data is collected from previous stages */
 const AUDIT_PATHS = {
-  /** From pre-flight stage */
+  /**
+   * Validation data paths (from pre-flight).
+   * Note: Pre-flight runs in the dispatcher workflow, so these files are only
+   * available if explicitly downloaded from the dispatcher's artifacts.
+   */
   validationStatus: '/tmp/audit-data/validation/validation-status.json',
   permissionIssues: '/tmp/audit-data/validation/permission-issues.json',
   /** From agent execution stage */
@@ -28,7 +34,7 @@ const AUDIT_PATHS = {
   outputsDir: '/tmp/audit-data/outputs',
 } as const;
 
-/** Validation status from pre-flight stage */
+/** Validation status (from pre-flight, if available) */
 interface ValidationStatus {
   secrets_check: boolean;
   user_authorization: boolean;
@@ -121,10 +127,7 @@ function detectFailures(ctx: StageContext, auditData: AuditData): FailureInfo {
   }
 
   // Check job results
-  if (jobStatuses?.preFlight && jobStatuses.preFlight !== 'success') {
-    reasons.push(`Pre-flight validation failed (${jobStatuses.preFlight})`);
-  }
-
+  // Note: Pre-flight checks run in dispatcher, not in agent workflows
   if (
     jobStatuses?.claudeAgent &&
     jobStatuses.claudeAgent !== 'success' &&
@@ -201,7 +204,6 @@ function generateAuditReport(
     return `[FAIL] ${result}`;
   };
 
-  lines.push(`| pre-flight | ${formatJobResult(ctx.jobStatuses?.preFlight)} |`);
   lines.push(`| claude-agent | ${formatJobResult(ctx.jobStatuses?.claudeAgent)} |`);
 
   if (ctx.jobStatuses?.collectContext) {
@@ -293,7 +295,7 @@ async function findExistingIssue(agentName: string, labels: string[]): Promise<n
         .quiet()
         .text();
     const issueNumber = parseInt(result.trim(), 10);
-    return isNaN(issueNumber) ? undefined : issueNumber;
+    return Number.isNaN(issueNumber) ? undefined : issueNumber;
   } catch {
     return undefined;
   }
