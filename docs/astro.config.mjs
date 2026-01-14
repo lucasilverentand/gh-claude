@@ -1,7 +1,6 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import starlightThemeRapide from 'starlight-theme-rapide';
-import starlightLinksValidator from 'starlight-links-validator';
 import react from '@astrojs/react';
 
 export default defineConfig({
@@ -11,7 +10,7 @@ export default defineConfig({
     starlight({
       title: 'Repo Agents',
       description: 'CLI tool for creating AI-powered GitHub Actions workflows from markdown agent definitions',
-      plugins: [starlightThemeRapide(), starlightLinksValidator()],
+      plugins: [starlightThemeRapide()],
       social: [
         {
           label: 'GitHub',
