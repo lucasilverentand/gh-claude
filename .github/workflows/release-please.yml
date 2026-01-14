@@ -60,16 +60,30 @@ jobs:
             exit 1
           fi
 
+      - name: Setup Node.js for npm publish
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Create release tarball
+        env:
+          RELEASE_VERSION: ${{ needs.release-please.outputs.version }}
         run: |
-          tar -czf repo-agents-${{ needs.release-please.outputs.version }}.tar.gz dist/
+          tar -czf "repo-agents-${RELEASE_VERSION}.tar.gz" dist/
 
       - name: Upload release artifact
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
+          RELEASE_VERSION: ${{ needs.release-please.outputs.version }}
         run: |
-          gh release upload ${{ needs.release-please.outputs.tag_name }} \
-            repo-agents-${{ needs.release-please.outputs.version }}.tar.gz
+          gh release upload "${TAG_NAME}" "repo-agents-${RELEASE_VERSION}.tar.gz"
 
       - name: Trigger documentation deployment
         env:

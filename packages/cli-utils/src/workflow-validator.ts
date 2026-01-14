@@ -1,15 +1,10 @@
 import { Ajv } from 'ajv';
 import type { ErrorObject } from 'ajv';
-import type { FormatsPlugin } from 'ajv-formats';
-import { createRequire } from 'module';
+import addFormats from 'ajv-formats';
 import yaml from 'js-yaml';
 import { readFile, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
-
-// Use require for ajv-formats due to ESM/CJS interop issues
-const require = createRequire(import.meta.url);
-const addFormats: FormatsPlugin = require('ajv-formats');
 
 const SCHEMA_URL = 'https://json.schemastore.org/github-workflow.json';
 const SCHEMA_CACHE_PATH = join(tmpdir(), 'repo-agents-workflow-schema.json');
