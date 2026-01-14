@@ -40,7 +40,7 @@ jobs:
         continue-on-error: true
 
       - name: Prettier check
-        run: bun x prettier --check "src/**/*.ts"
+        run: bun x prettier --check "packages/*/src/**/*.ts"
 
       - name: Check for uncommitted changes
         run: |
