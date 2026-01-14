@@ -47,12 +47,12 @@ run_test() {
     fi
 }
 
-echo "1. Building Project"
+echo "1. Type Checking"
 echo "-------------------------------------------"
-if bun run build > /dev/null 2>&1; then
-    success "Build successful"
+if bun x tsc --noEmit > /dev/null 2>&1; then
+    success "Type check passed"
 else
-    error "Build failed"
+    error "Type check failed"
     exit 1
 fi
 
@@ -60,24 +60,24 @@ echo ""
 echo "2. CLI Tests"
 echo "-------------------------------------------"
 
-run_test "CLI help command" "bun dist/index.js --help > /dev/null"
-run_test "CLI version command" "bun dist/index.js --version > /dev/null"
+run_test "CLI help command" "bun packages/cli/src/index.ts --help > /dev/null"
+run_test "CLI version command" "bun packages/cli/src/index.ts --version > /dev/null"
 
 echo ""
 echo "3. Validation Tests"
 echo "-------------------------------------------"
 
 run_test "Validate issue-triage example" \
-    "bun dist/index.js validate examples/issue-triage.md > /dev/null 2>&1"
+    "bun packages/cli/src/index.ts validate examples/issue-triage.md > /dev/null 2>&1"
 
 run_test "Validate pr-review example" \
-    "bun dist/index.js validate examples/pr-review.md > /dev/null 2>&1"
+    "bun packages/cli/src/index.ts validate examples/pr-review.md > /dev/null 2>&1"
 
 run_test "Validate daily-summary example" \
-    "bun dist/index.js validate examples/daily-summary.md > /dev/null 2>&1"
+    "bun packages/cli/src/index.ts validate examples/daily-summary.md > /dev/null 2>&1"
 
 run_test "Validate stale-issues example" \
-    "bun dist/index.js validate examples/stale-issues.md > /dev/null 2>&1"
+    "bun packages/cli/src/index.ts validate examples/stale-issues.md > /dev/null 2>&1"
 
 echo ""
 echo "4. Compilation Tests"
@@ -91,13 +91,13 @@ cp examples/issue-triage.md "$TEMP_DIR/.github/agents/"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 run_test "Compile with dry-run" \
-    "cd $TEMP_DIR && bun '$SCRIPT_DIR/dist/index.js' compile --dry-run .github/agents/issue-triage.md > /dev/null 2>&1 && cd '$SCRIPT_DIR'"
+    "cd $TEMP_DIR && bun '$SCRIPT_DIR/packages/cli/src/index.ts' compile --dry-run > /dev/null 2>&1 && cd '$SCRIPT_DIR'"
 
 run_test "Compile to workflows directory" \
-    "cd $TEMP_DIR && bun '$SCRIPT_DIR/dist/index.js' compile --all > /dev/null 2>&1 && cd '$SCRIPT_DIR'"
+    "cd $TEMP_DIR && bun '$SCRIPT_DIR/packages/cli/src/index.ts' compile > /dev/null 2>&1 && cd '$SCRIPT_DIR'"
 
 run_test "Check workflow file was created" \
-    "test -f $TEMP_DIR/.github/workflows/claude-issue-triage.yml"
+    "test -f $TEMP_DIR/.github/workflows/agent-issue-triage.yml"
 
 # Cleanup - but return to script dir first
 cd "$SCRIPT_DIR"
@@ -121,7 +121,7 @@ fi
 # Skip if no agents in test-repo yet
 if [ -d "../test-repo/.github/agents" ]; then
     run_test "List agents in test repo" \
-        "cd ../test-repo && bun ../repo-agents/dist/index.js list > /dev/null 2>&1"
+        "cd ../test-repo && bun ../repo-agents/packages/cli/src/index.ts list > /dev/null 2>&1"
 else
     info "Test repository has no agents yet (run init first)"
 fi

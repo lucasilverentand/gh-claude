@@ -3,40 +3,9 @@ title: Issue Events
 description: Respond to issue activity in your repository
 ---
 
-Trigger your agent when issues are created, updated, labeled, or otherwise modified.
+The issues trigger activates your agent when issues are created, updated, labeled, or otherwise modified in your repository. This is one of the most commonly used triggers for building automation around issue triage, support workflows, and contributor engagement.
 
-## Basic Configuration
-
-```yaml
-on:
-  issues:
-    types: [opened]
-```
-
-## Available Event Types
-
-- **`opened`** - Issue is created
-- **`edited`** - Issue title or body is modified
-- **`deleted`** - Issue is deleted
-- **`transferred`** - Issue is transferred to another repository
-- **`pinned`** - Issue is pinned
-- **`unpinned`** - Issue is unpinned
-- **`closed`** - Issue is closed
-- **`reopened`** - Issue is reopened
-- **`assigned`** - Issue is assigned to someone
-- **`unassigned`** - Issue is unassigned
-- **`labeled`** - Label is added to issue
-- **`unlabeled`** - Label is removed from issue
-- **`locked`** - Issue conversation is locked
-- **`unlocked`** - Issue conversation is unlocked
-- **`milestoned`** - Issue is added to milestone
-- **`demilestoned`** - Issue is removed from milestone
-
-## Common Use Cases
-
-### Issue Triage
-
-Automatically categorize and label new issues:
+## Basic Example
 
 ```yaml
 ---
@@ -48,15 +17,95 @@ permissions:
   issues: write
 ---
 
-Analyze new issues and:
-1. Categorize with appropriate labels (bug, feature, documentation, question)
-2. Assess priority
-3. Welcome the contributor
+Analyze new issues and categorize them appropriately.
 ```
 
-### Label-Based Routing
+## Configuration Options
 
-React when specific labels are added:
+```yaml
+on:
+  issues:
+    types: [opened, edited]  # string[] — default: all types
+trigger_labels: [bug]        # string[] — optional
+rate_limit_minutes: 5        # number — default: 5
+allowed-users: [octocat]     # string[] — optional
+allowed-teams: [maintainers] # string[] — optional
+```
+
+**types** — Which issue events trigger the agent: `opened`, `edited`, `deleted`, `transferred`, `pinned`, `unpinned`, `closed`, `reopened`, `assigned`, `unassigned`, `labeled`, `unlabeled`, `locked`, `unlocked`, `milestoned`, `demilestoned`.
+
+**trigger_labels** — Restricts the agent to only run when specific labels are present on the issue.
+
+**rate_limit_minutes** — Prevents the agent from running too frequently on the same repository.
+
+**allowed-users** — Restricts which users can trigger the agent (defaults to admins, write access, and org members).
+
+**allowed-teams** — Restricts the agent to only be triggered by members of specific teams.
+
+## Best Practices
+
+Be selective with your event types. Listening to many events increases the chance of your agent running unnecessarily and consuming API credits. Start with a focused set of events like `opened` for new issue triage, then expand if needed.
+
+Use label filtering to create targeted workflows. Rather than having one agent process all issues, create specialized agents that respond to specific labels like `bug`, `feature-request`, or `needs-help`. This makes each agent simpler and more focused.
+
+Account for rapid edits. Users often submit an issue and immediately edit it to fix formatting. Combine the `edited` event type with a reasonable `rate_limit_minutes` value to avoid processing intermediate states.
+
+Consider idempotent operations when designing your agent instructions. Since users can add and remove labels, reopen closed issues, or trigger the same event multiple times, your agent should handle being run repeatedly on the same issue gracefully.
+
+## More Examples
+
+<details>
+<summary>Example: Welcome First-Time Contributors</summary>
+
+```yaml
+---
+name: Welcome Bot
+on:
+  issues:
+    types: [opened]
+permissions:
+  issues: write
+outputs:
+  add-comment: true
+---
+
+Check if this is the user's first issue in the repository.
+If so, welcome them warmly and provide helpful links to:
+- Contributing guidelines
+- Code of conduct
+- How to get help
+
+If they are a returning contributor, thank them for the continued engagement.
+```
+
+</details>
+
+<details>
+<summary>Example: Issue Template Validator</summary>
+
+```yaml
+---
+name: Template Validator
+on:
+  issues:
+    types: [opened]
+permissions:
+  issues: write
+outputs:
+  add-comment: true
+  add-label: true
+---
+
+Check if the issue follows the template:
+1. Verify required sections are present (Description, Steps to Reproduce, Expected Behavior)
+2. If missing sections, add a polite comment requesting the missing information
+3. Add 'needs-more-info' label if the issue is incomplete
+```
+
+</details>
+
+<details>
+<summary>Example: Label-Based Bug Investigation</summary>
 
 ```yaml
 ---
@@ -67,40 +116,22 @@ on:
 trigger_labels: [bug, needs-investigation]
 permissions:
   issues: write
+outputs:
+  add-comment: true
+  add-label: true
 ---
 
 When a bug is reported:
-1. Check for reproduction steps
-2. Request additional information if needed
-3. Add priority label based on severity
+1. Check for reproduction steps in the issue body
+2. If reproduction steps are missing, request them
+3. Look for similar issues that might be duplicates
+4. Add priority label based on the severity described
 ```
 
-### Stale Issue Management
+</details>
 
-Close or update issues that haven't had activity:
-
-```yaml
----
-name: Stale Issue Cleanup
-on:
-  issues:
-    types: [labeled]
-  schedule:
-    - cron: '0 0 * * *'  # Check daily
-trigger_labels: [stale]
-permissions:
-  issues: write
----
-
-For stale issues:
-1. Check last activity date
-2. Add warning comment if approaching closure
-3. Close if no activity after warning
-```
-
-### Auto-Assignment
-
-Automatically assign issues based on content:
+<details>
+<summary>Example: Auto-Assignment by Content</summary>
 
 ```yaml
 ---
@@ -110,155 +141,16 @@ on:
     types: [opened]
 permissions:
   issues: write
+outputs:
+  add-comment: true
+  add-label: true
 ---
 
-Route issues to the right team member:
-1. Analyze issue content and labels
-2. Determine relevant area (frontend, backend, docs)
-3. Assign to appropriate team member
+Route issues to the right area based on content analysis:
+1. Analyze the issue title and body for keywords
+2. Determine the relevant area (frontend, backend, documentation, infrastructure)
+3. Add the appropriate area label
+4. If the issue mentions specific files or components, note which team member typically works on that area
 ```
 
-## Multiple Event Types
-
-Listen to multiple events:
-
-```yaml
-on:
-  issues:
-    types: [opened, edited, labeled]
-```
-
-## Available Data
-
-When your agent runs, it has access to:
-
-- **Issue number** - via `${{ github.event.issue.number }}`
-- **Issue title** - via `${{ github.event.issue.title }}`
-- **Issue body** - via `${{ github.event.issue.body }}`
-- **Issue author** - via `${{ github.event.issue.user.login }}`
-- **Issue labels** - via `${{ github.event.issue.labels }}`
-- **Issue state** - via `${{ github.event.issue.state }}`
-
-Access this data using the `gh` CLI:
-
-```bash
-# Get issue details
-gh issue view ${{ github.event.issue.number }}
-
-# Get issue comments
-gh issue view ${{ github.event.issue.number }} --comments
-```
-
-## Required Permissions
-
-For read-only operations:
-
-```yaml
-permissions:
-  issues: read
-```
-
-For operations that modify issues:
-
-```yaml
-permissions:
-  issues: write
-```
-
-See [Permissions](../../guide/permissions/) for details.
-
-## Rate Limiting
-
-Issues can be edited frequently. Use rate limiting to prevent excessive runs:
-
-```yaml
-on:
-  issues:
-    types: [edited]
-rate_limit_minutes: 10  # Max once per 10 minutes
-```
-
-## Best Practices
-
-### Choose Specific Events
-
-Don't listen to all events if you only need specific ones:
-
-```yaml
-# ❌ Too broad
-on:
-  issues:
-    types: [opened, edited, closed, reopened, labeled, unlabeled, assigned, unassigned]
-
-# ✅ Specific
-on:
-  issues:
-    types: [opened]
-```
-
-### Use Label Filtering
-
-Reduce unnecessary runs by filtering on labels:
-
-```yaml
-on:
-  issues:
-    types: [labeled, opened]
-trigger_labels: [needs-triage]
-```
-
-This only triggers when the issue has the `needs-triage` label.
-
-### Handle Edge Cases
-
-Remember that:
-- Users can rapidly edit issues
-- Labels can be added and removed multiple times
-- Issues can be reopened after closure
-
-Use rate limiting and idempotent operations to handle these cases gracefully.
-
-## Examples
-
-### Welcome First-Time Contributors
-
-```yaml
----
-name: Welcome Bot
-on:
-  issues:
-    types: [opened]
-permissions:
-  issues: write
----
-
-Check if this is the user's first issue in the repository.
-If so, welcome them warmly and provide helpful links to:
-- Contributing guidelines
-- Code of conduct
-- How to get help
-```
-
-### Require Issue Template
-
-```yaml
----
-name: Template Validator
-on:
-  issues:
-    types: [opened]
-permissions:
-  issues: write
----
-
-Check if the issue follows the template:
-1. Verify required sections are present
-2. If missing, add a comment requesting proper formatting
-3. Add 'needs-template' label
-```
-
-## Next Steps
-
-- Learn about [Pull Request triggers](pull-requests/)
-- Understand [Permissions](../../guide/permissions/)
-- See [Issue Triage example](../../examples/issue-triage/)
+</details>

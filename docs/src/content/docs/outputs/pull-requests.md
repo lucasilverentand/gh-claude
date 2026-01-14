@@ -1,289 +1,14 @@
 ---
-title: Pull Requests (create-pr, close-pr)
+title: Pull Requests
 description: Enable agents to create and close pull requests
 ---
 
-The `create-pr` and `close-pr` outputs enable your agent to manage pull requests in your repository. Use pull requests for code review and change management workflows.
+The `create-pr` and `close-pr` outputs allow your agent to manage pull requests programmatically. These are powerful capabilities for automating code changes, documentation updates, and maintenance tasks that require review before merging.
 
-## Configuration
-
-### Simple Enable
-
-Enable PR management without restrictions:
+## Basic Example
 
 ```yaml
-outputs:
-  create-pr: true
-  close-pr: true
-```
-
-With `create-pr`, you must also configure `allowed-paths`:
-
-```yaml
-allowed-paths:
-  - docs/**
-  - README.md
-
-outputs:
-  create-pr: true
-```
-
-### With Options
-
-Configure signing and limits:
-
-```yaml
-outputs:
-  create-pr: { sign: true, max: 1 }
-  close-pr: true
-```
-
-**Options for `create-pr`:**
-- `sign` - Sign commits with GPG key (default: false)
-- `max` - Maximum number of PRs to create per run (default: unlimited)
-
-**Options for `close-pr`:**
-- No configuration options available
-
-### Individual Control
-
-Enable only the operations needed:
-
-```yaml
-outputs:
-  create-pr: { max: 1 }  # Can create PRs
-  # close-pr not specified - cannot close
-```
-
-## Permission Requirements
-
-### create-pr
-
-Requires `contents: write` and `pull_requests: write` permissions:
-
-```yaml
-permissions:
-  contents: write
-  pull_requests: write
-
-allowed-paths:
-  - docs/**
-  - README.md
-
-outputs:
-  create-pr: { max: 1 }
-```
-
-### close-pr
-
-Requires `pull_requests: write` permission:
-
-```yaml
-permissions:
-  pull_requests: write
-
-outputs:
-  close-pr: true
-```
-
-### Both Operations
-
-```yaml
-permissions:
-  contents: write
-  pull_requests: write
-
-allowed-paths:
-  - docs/**
-  - README.md
-
-outputs:
-  create-pr: { sign: true, max: 1 }
-  close-pr: true
-```
-
-## Required allowed-paths
-
-The `create-pr` output **requires** an `allowed-paths` allowlist. This restricts which files the agent can modify:
-
-```yaml
-allowed-paths:
-  - docs/**/*.md          # All markdown in docs
-  - README.md             # Specific file
-  - CHANGELOG.md
-  - .github/workflows/*.md # Workflow docs
-
-outputs:
-  create-pr: { max: 1 }
-```
-
-### Path Pattern Syntax
-
-- `**` - Matches any number of nested directories
-- `*` - Matches any filename in a single directory
-- `*.md` - Matches all markdown files
-- `docs/**/README.md` - Markdown files in any docs subdirectory
-- Exact paths - `README.md`, `src/config.json`
-
-### Examples
-
-**Documentation Updates:**
-```yaml
-allowed-paths:
-  - docs/**
-  - README.md
-  - CHANGELOG.md
-  - CONTRIBUTING.md
-```
-
-**Configuration Files:**
-```yaml
-allowed-paths:
-  - .github/workflows/**
-  - config/**
-  - .eslintrc.js
-```
-
-**Specific Directories:**
-```yaml
-allowed-paths:
-  - examples/**
-  - samples/**
-```
-
-**Multiple Patterns:**
-```yaml
-allowed-paths:
-  - docs/**
-  - README.md
-  - CHANGELOG.md
-  - scripts/generate-*.sh
-```
-
-## Commit Signing
-
-### Enable Signing
-
-Sign commits to provide cryptographic verification:
-
-```yaml
-outputs:
-  create-pr: { sign: true }
-  update-file: { sign: true }
-```
-
-### Why Sign Commits?
-
-- Verifies commit authenticity
-- Provides traceability
-- Increases security and trust
-- Required by some organizations
-
-### Signing Requirements
-
-For signing to work:
-1. Must have GitHub account with GPG key configured
-2. Agent runs in GitHub Actions (which handles signing)
-3. Token must have appropriate permissions
-
-## Creating Pull Requests
-
-### Single PR Per Run
-
-Recommended to prevent excessive PRs:
-
-```yaml
-permissions:
-  contents: write
-  pull_requests: write
-
-allowed-paths:
-  - docs/**
-
-outputs:
-  create-pr: { max: 1 }
-```
-
-### Multiple PRs
-
-Allow creating multiple PRs when handling batches:
-
-```yaml
-permissions:
-  contents: write
-  pull_requests: write
-
-allowed-paths:
-  - docs/**
-  - examples/**
-
-outputs:
-  create-pr: { max: 5, sign: true }
-```
-
-### PR Structure
-
-Create PRs with clear title, description, and branch naming:
-
-```markdown
-Branch: docs/update-api-reference
-
-Title: "docs: Update API reference for v2.0"
-
-Body:
-## Changes
-- Updated endpoint documentation
-- Added new response examples
-- Fixed parameter descriptions
-
-## Related Issues
-Fixes #123
-
-## Type of Change
-- [ ] Bug fix
-- [x] Documentation update
-- [ ] New feature
-- [ ] Breaking change
-
-## Checklist
-- [x] Changes follow style guidelines
-- [x] Documentation updated
-- [x] No new warnings generated
-```
-
-## Closing Pull Requests
-
-### Basic Close
-
-Close PRs without additional context:
-
-```yaml
-permissions:
-  pull_requests: write
-
-outputs:
-  close-pr: true
-```
-
-### Close with Comment
-
-Combine with `add-comment` to explain closure:
-
-```yaml
-permissions:
-  pull_requests: write
-
-outputs:
-  close-pr: true
-  add-comment: { max: 1 }
-```
-
-## Agent Configuration Examples
-
-### Documentation Automation
-
-```yaml
-name: Auto-Update Docs
+name: Documentation Updater
 on:
   schedule:
     - cron: '0 0 * * MON'
@@ -292,33 +17,100 @@ permissions:
   contents: write
   pull_requests: write
 
-allowed-paths:
-  - docs/**
-  - README.md
-
 outputs:
-  create-pr: { sign: true, max: 1 }
-
-inputs:
-  pull_requests:
-    since: 7d
+  create-pr: true
 ```
 
-**In your agent instructions:**
-```markdown
-Every Monday:
-- Review PRs merged in the last week
-- Update docs/CHANGELOG.md with new features and fixes
-- Update README.md statistics
-- Create PR titled "docs: Weekly update [date]"
-
-Only create PR if there are changes to document.
-```
-
-### Dependency Update Automation
+## Configuration Options
 
 ```yaml
-name: Update Dependencies
+outputs:
+  create-pr: true            # boolean | { max, sign } — default: false
+  close-pr: true             # boolean — default: false
+  # or with options:
+  create-pr:
+    max: 1                   # number — default: 10
+    sign: true               # boolean — default: false
+```
+
+**create-pr** — Enable creating pull requests. Requires `contents: write` permission.
+
+**close-pr** — Enable closing/merging PRs.
+
+**max** — Maximum PRs to create per run.
+
+**sign** — GPG sign commits in created PRs.
+
+## Permission Requirements
+
+Creating pull requests requires both `contents: write` and `pull_requests: write` permissions. The contents permission is necessary because the agent needs to create branches and commit files, while the pull_requests permission allows the actual PR creation.
+
+```yaml
+permissions:
+  contents: write
+  pull_requests: write
+```
+
+Closing pull requests only requires `pull_requests: write` since no file modifications are involved.
+
+## How Agents Create Pull Requests
+
+When an agent wants to create a pull request, it writes a JSON file to `/tmp/outputs/create-pr.json` containing the branch name, title, body, and an array of files to include. The execution system then processes this file, creates the branch, commits the files, and opens the pull request.
+
+The JSON structure requires a `branch` field for the new branch name, a `title` for the PR, a `body` with the description, and a `files` array where each entry has a `path` and `content`. An optional `base` field specifies the target branch (defaults to the repository's default branch).
+
+For multiple pull requests, the agent creates numbered files like `create-pr-1.json`, `create-pr-2.json`, and so on.
+
+## Best Practices
+
+Keep pull request creation limits low. Setting `max: 1` ensures each agent run produces one focused, reviewable change rather than a batch of PRs that could overwhelm reviewers or cause merge conflicts.
+
+Use descriptive branch names that follow your team's conventions. Branch names should indicate the type of change and provide context, such as `docs/update-api-reference` or `fix/validation-error-handling`.
+
+Write meaningful PR descriptions that explain not just what changed but why. Include any relevant context that reviewers need to understand the automated change.
+
+Consider combining `create-pr` with `add-label` to automatically categorize your automated PRs. This makes it easy to filter and track agent-generated changes in your repository.
+
+Enable commit signing for production repositories where traceability and verification are important. Signed commits provide an audit trail and help distinguish automated changes from manual ones.
+
+Use `close-pr` sparingly and consider always pairing it with `add-comment` to explain why the PR is being closed. Unexplained closures can confuse contributors.
+
+## Examples
+
+<details>
+<summary>Example: Weekly documentation sync</summary>
+
+```yaml
+name: Weekly Docs Sync
+on:
+  schedule:
+    - cron: '0 9 * * MON'
+
+permissions:
+  contents: write
+  pull_requests: write
+
+outputs:
+  create-pr: { max: 1, sign: true }
+  add-label: true
+```
+
+```markdown
+Review the README and documentation files for outdated information.
+Compare against the current codebase and update any inconsistencies.
+
+If changes are needed, create a single PR with all updates.
+Use the branch name "docs/weekly-sync-YYYY-MM-DD".
+Add the "documentation" label to the PR.
+```
+
+</details>
+
+<details>
+<summary>Example: Dependency update automation</summary>
+
+```yaml
+name: Dependency Updater
 on:
   schedule:
     - cron: '0 0 * * 0'
@@ -327,319 +119,86 @@ permissions:
   contents: write
   pull_requests: write
 
-allowed-paths:
-  - package.json
-  - package-lock.json
-  - requirements.txt
-
 outputs:
-  create-pr: { sign: true, max: 1 }
+  create-pr: { max: 1, sign: true }
   add-label: true
-
-inputs:
-  workflow_runs:
-    since: 7d
 ```
 
-**In your agent instructions:**
 ```markdown
-If vulnerability alerts exist:
-- Create branch: "deps/security-updates"
-- Run npm audit fix or pip-audit --fix
-- Create PR titled "chore: Security dependency updates"
-- List fixed vulnerabilities in description
-- Add labels: chore, dependencies
+Check for outdated dependencies in package.json.
+If security vulnerabilities exist, prioritize those updates.
 
-Only create PR if updates were applied.
+Create a PR with the updated package.json and lock file.
+Title should follow: "chore(deps): update dependencies [date]"
+Include a summary of what was updated in the PR body.
+Add labels: dependencies, automated
 ```
 
-### Code Generation and Updates
+</details>
+
+<details>
+<summary>Example: PR triage with close capability</summary>
 
 ```yaml
-name: Generate Files
+name: PR Triage
+on:
+  pull_request:
+    types:
+      - opened
+
+permissions:
+  pull_requests: write
+
+outputs:
+  close-pr: true
+  add-comment: { max: 1 }
+```
+
+```markdown
+Review the incoming pull request for basic requirements:
+- Has a meaningful title
+- Has a description explaining the changes
+- Follows the contribution guidelines
+
+If the PR is clearly spam or violates guidelines:
+1. Add a polite comment explaining the issue
+2. Close the PR
+
+Otherwise, do nothing and let human reviewers handle it.
+```
+
+</details>
+
+<details>
+<summary>Example: Code generation from schema changes</summary>
+
+```yaml
+name: Schema Codegen
 on:
   pull_request:
     types:
       - opened
       - synchronize
     paths:
-      - 'src/schema/**'
+      - 'schemas/**'
 
 permissions:
   contents: write
   pull_requests: write
 
-allowed-paths:
-  - src/generated/**
-  - docs/api/**
-
 outputs:
   create-pr: { max: 1 }
 ```
 
-**In your agent instructions:**
 ```markdown
-When schema files change:
-- Generate TypeScript types from schema
-- Generate API documentation
-- If changes detected, create PR titled "chore: Regenerate from schema"
-- Label: generated
-- Link to triggering PR
+When schema files change, regenerate the TypeScript types.
 
-Don't sign commits for generated code.
+Read the schema files from schemas/ directory.
+Generate corresponding TypeScript interfaces.
+Write the generated code to src/generated/types.ts.
+
+Create a PR titled "chore: regenerate types from schema"
+Reference the triggering PR in the description.
 ```
 
-### Automated Refactoring
-
-```yaml
-name: Code Refactoring
-on:
-  schedule:
-    - cron: '0 2 * * MON'
-
-permissions:
-  contents: write
-  pull_requests: write
-
-allowed-paths:
-  - src/**
-  - tests/**
-
-outputs:
-  create-pr: { sign: true, max: 1 }
-
-inputs:
-  issues:
-    since: 30d
-```
-
-**In your agent instructions:**
-```markdown
-Look for refactoring opportunities:
-- Check for deprecation warnings
-- Find unused imports or variables
-- Identify repeated patterns (DRY violations)
-- If found, create PR titled "refactor: Improve code quality [date]"
-- Explain what changed and why
-- Label: refactor
-```
-
-## Use Cases
-
-### Documentation Updates
-Keep docs in sync with code:
-```yaml
-allowed-paths:
-  - docs/**
-  - README.md
-outputs:
-  create-pr: { sign: true, max: 1 }
-```
-
-### Automated Maintenance
-Dependency updates, code cleanup:
-```yaml
-allowed-paths:
-  - package.json
-  - .github/workflows/**
-outputs:
-  create-pr: { sign: true, max: 1 }
-```
-
-### Code Generation
-Auto-generate code from schemas or templates:
-```yaml
-allowed-paths:
-  - src/generated/**
-outputs:
-  create-pr: { max: 1 }
-```
-
-### Bulk Updates
-Update multiple files across the repo:
-```yaml
-allowed-paths:
-  - src/**
-  - docs/**
-outputs:
-  create-pr: { sign: true, max: 1 }
-```
-
-## Best Practices
-
-### 1. Strict Allowed Paths
-
-Always use narrow `allowed-paths` patterns:
-
-```yaml
-# Good - specific paths
-allowed-paths:
-  - docs/**
-  - README.md
-
-# Avoid - too broad
-allowed-paths:
-  - '**'
-
-# Avoid - single top-level directory
-allowed-paths:
-  - src/**
-```
-
-### 2. Set Creation Limits
-
-Always use `max` for `create-pr`:
-
-```yaml
-outputs:
-  create-pr: { max: 1 }  # Recommended
-```
-
-Without limits, PRs could proliferate unexpectedly.
-
-### 3. Sign Important Changes
-
-Use commit signing for production code:
-
-```yaml
-outputs:
-  create-pr: { sign: true }      # Production code
-  create-pr: { sign: false }     # Generated files, docs
-```
-
-### 4. Meaningful Commit Messages
-
-Follow conventional commits:
-
-```markdown
-feat: Add new feature
-fix: Resolve bug
-docs: Update documentation
-refactor: Improve code structure
-chore: Maintenance tasks
-test: Add or update tests
-```
-
-### 5. Provide Clear PR Descriptions
-
-Include context and rationale:
-
-```markdown
-## What
-Updated documentation for new API endpoints
-
-## Why
-API v2.0 has breaking changes that need documentation
-
-## Testing
-- [ ] Verified against actual endpoints
-- [ ] Examples tested locally
-```
-
-## Security Considerations
-
-### File Path Restrictions
-
-`allowed-paths` is critical security control:
-
-```yaml
-# Good - restrictive
-allowed-paths:
-  - docs/**
-  - README.md
-
-# Bad - allows sensitive files
-allowed-paths:
-  - '**'
-  - src/**  # Includes source code
-```
-
-### Commit Signing
-
-Sign commits to verify authenticity:
-
-```yaml
-outputs:
-  create-pr: { sign: true }
-```
-
-### PR Templates
-
-Use PR templates to enforce standards:
-
-```markdown
-# .github/pull_request_template.md
-
-## Changes
-[Description here]
-
-## Type
-- [ ] Bug fix
-- [ ] Feature
-- [ ] Breaking change
-
-## Testing
-- [ ] Tests added/updated
-- [ ] Verified locally
-```
-
-### Access Control
-
-Grant minimal permissions:
-
-```yaml
-# Good - specific and limited
-permissions:
-  contents: write
-  pull_requests: write
-
-allowed-paths:
-  - docs/**
-
-outputs:
-  create-pr: { max: 1 }
-```
-
-## Troubleshooting
-
-### PRs Not Being Created
-
-Check that:
-1. `permissions` includes `contents: write` and `pull_requests: write`
-2. `allowed-paths` is configured for `create-pr`
-3. Agent has logic to determine when to create PRs
-4. The `max` limit hasn't been reached
-
-### Commits Not Being Signed
-
-Verify:
-1. `sign: true` is configured
-2. GitHub account has GPG key configured
-3. Agent is running in GitHub Actions (required for signing)
-
-### Path Restrictions Too Strict
-
-If PRs can't modify needed files:
-1. Review `allowed-paths` patterns
-2. Ensure patterns match intended files
-3. Test glob patterns
-
-### Unexpected File Changes
-
-If PRs modify files outside `allowed-paths`:
-1. Review `allowed-paths` configuration
-2. Check for overly broad patterns like `**`
-3. Verify agent logic
-
-## Related Outputs
-
-- [Comments (add-comment)](./comments/) - Pair with PRs for feedback
-- [Labels (add-label, remove-label)](./labels/) - For PR organization
-- [Files (update-file)](./files/) - For file modifications without PRs
-- [Issues (create-issue, close-issue)](./issues/) - For issue management
-
-## Next Steps
-
-- Learn about [Permissions](../../guide/permissions/)
-- Explore [File Modifications](./files/)
-- Review [Security Best Practices](../../reference/security/)
+</details>

@@ -1,5 +1,96 @@
 ---
-title: Agent Stages
-slug: anatomy/stages
-description: Understanding the stages of a Repo Agents agent's lifecycle
+title: What is an Agent?
+slug: anatomy/what-is-an-agent
+description: Understanding agents in repo-agents and how they work
+sidebar:
+  label: What is an Agent?
+  order: 0
 ---
+
+import { Steps } from '@astrojs/starlight/components';
+
+An **agent** in repo-agents is a markdown file that defines an AI-powered automation for your GitHub repository. Each agent combines natural language instructions with structured configuration to create a GitHub Actions workflow powered by Claude.
+
+## The Agent File
+
+Agents live in `.github/agents/` as markdown files with YAML frontmatter. The frontmatter defines *what* the agent can do, while the markdown body defines *how* it should behave.
+
+```markdown
+---
+name: Issue Triage
+on:
+  issues:
+    types: [opened]
+outputs:
+  - add-label
+  - add-comment
+---
+
+You are an issue triage assistant. When a new issue is opened:
+
+1. Read the issue title and body carefully
+2. Categorize it as bug, feature, question, or documentation
+3. Add the appropriate label
+4. Post a helpful comment acknowledging the issue
+```
+
+This simple file becomes a complete GitHub Actions workflow that:
+- Triggers when issues are opened
+- Runs Claude with your instructions
+- Allows Claude to add labels and comments
+- Includes validation, rate limiting, and audit logging
+
+## Core Concepts
+
+### Declarative Configuration
+
+The frontmatter declares your agent's capabilities:
+
+- **Triggers** (`on`) - Which GitHub events start the agent
+- **Outputs** - What actions the agent can take (labels, comments, PRs, etc.)
+- **Context** - Additional data to collect before execution
+- **Permissions** - GitHub API permissions required
+- **Constraints** - Rate limits, allowed users, path restrictions
+
+### Natural Language Instructions
+
+The markdown body is your prompt to Claude. Write it like you're explaining the task to a capable colleague:
+
+- Describe the goal and context
+- Provide decision criteria
+- Include examples when helpful
+- Specify edge cases and exceptions
+
+### Compiled Workflows
+
+When you run `repo-agents compile`, each agent file becomes a GitHub Actions workflow with multiple jobs handling validation, execution, and auditing. You write markdown; the tool handles the infrastructure.
+
+## Execution Flow
+
+When an event triggers an agent, it flows through a series of stages in GitHub Actions. Each stage has a specific purpose in the execution pipeline.
+
+<Steps>
+
+1. **[Dispatcher](/repo-agents/stages/dispatcher/)**
+
+   The dispatcher is a centralized workflow that routes events to the appropriate agents and performs pre-flight checks. It aggregates triggers from all agents into a single entry point and uses a routing table to match incoming events to the right agents, dispatching them using a matrix strategy. Before dispatching, it validates API authentication, checks user authorization (admin, allowed users, or team members), enforces rate limiting, and validates trigger labels if configured. When a GitHub App is configured, its token is generated here. If any check fails, execution stops immediately.
+
+2. **[Context Building](/repo-agents/stages/context-building/)**
+
+   This stage prepares the context the agent will work with. It collects event data such as issue, PR, or discussion details, and can query the GitHub API for additional inputs when configured. For scheduled agents, it filters data by time range. All collected data is formatted as markdown that the agent can read and understand.
+
+3. **[Agent Execution](/repo-agents/stages/agent-execution/)**
+
+   This is where your agent's instructions are executed. The stage sets up the runtime environment and agent CLI, loads the context file containing event data and collected inputs, and creates skills documentation for the allowed outputs. The agent runs with appropriate tool permissions, and afterward the stage extracts and logs execution metrics including cost, turns, and duration. Any outputs are uploaded as artifacts for the next stage.
+
+4. **[Publish Outputs](/repo-agents/stages/publish-outputs/)**
+
+   After execution, this stage validates and publishes the agent's actions to GitHub. It validates output files against JSON schemas, then executes GitHub operations via the `gh` CLI. This includes posting comments, adding labels, and creating issues or PRs. Any validation errors are reported back to the relevant issues or PRs.
+
+5. **[Audit](/repo-agents/stages/audit/)**
+
+   The audit stage always runs, regardless of success or failure, to track metrics and handle problems. It collects all audit artifacts from previous stages and generates a comprehensive audit report with execution metrics like tokens, cost, and duration. When failures occur, it runs a diagnostic agent in safe, read-only mode. If configured, it can create GitHub issues for failures to ensure they're tracked and addressed.
+
+</Steps>
+
+

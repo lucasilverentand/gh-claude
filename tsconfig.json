@@ -1,24 +1,28 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "nodenext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
     "lib": ["ES2022"],
-    "outDir": "./dist",
-    "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
     "resolveJsonModule": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-    "moduleResolution": "nodenext"
+    "allowImportingTsExtensions": true,
+    "types": ["bun"],
+    "paths": {
+      "@repo-agents/types": ["./packages/types/src/index.ts"],
+      "@repo-agents/cli-utils": ["./packages/cli-utils/src/index.ts"],
+      "@repo-agents/cli-utils/*": ["./packages/cli-utils/src/*.ts"],
+      "@repo-agents/parser": ["./packages/parser/src/index.ts"],
+      "@repo-agents/parser/*": ["./packages/parser/src/*.ts"],
+      "@repo-agents/generator": ["./packages/generator/src/index.ts"],
+      "@repo-agents/generator/*": ["./packages/generator/src/*.ts"],
+      "@repo-agents/runtime": ["./packages/runtime/src/index.ts"],
+      "@repo-agents/cli": ["./packages/cli/src/index.ts"]
+    }
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts"]
+  "include": ["packages/*/src/**/*"],
+  "exclude": ["node_modules", "**/dist", "**/*.test.ts"]
 }

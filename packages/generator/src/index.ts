@@ -1,0 +1,430 @@
+import { writeFile } from 'fs/promises';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import yaml from 'js-yaml';
+import type { AgentDefinition, WorkflowStep } from '@repo-agents/types';
+import { agentNameToWorkflowName } from '@repo-agents/cli-utils';
+
+// Read package.json version at module load time
+let packageVersion = '0.4.1'; // fallback
+try {
+  // Try to read from package.json relative to this file (works in both src and dist)
+  const packageJsonPath = join(__dirname, '..//package.json');
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
+  packageVersion = packageJson.version;
+} catch {
+  // Use fallback version if reading fails
+}
+
+// Types for generated GitHub Actions workflow structures
+interface GitHubWorkflowJob {
+  'runs-on': string;
+  needs?: string | string[];
+  if?: string;
+  outputs?: Record<string, string>;
+  strategy?: Record<string, unknown>;
+  steps: WorkflowStep[];
+}
+
+export class WorkflowGenerator {
+  private formatYaml(yamlContent: string): string {
+    const lines = yamlContent.split('\n');
+    const formatted: string[] = [];
+    let previousLineWasStep = false;
+    let inJobs = false;
+    let inSteps = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      // Track when we enter jobs section
+      if (line === 'jobs:') {
+        inJobs = true;
+        formatted.push(line);
+        continue;
+      }
+
+      // Check if this is a job key (2 spaces indentation, ends with colon, alphanumeric+hyphens)
+      const isJobKey = inJobs && /^\s{2}[a-z-]+:$/.test(line);
+
+      // Check if entering steps section
+      if (trimmed === 'steps:') {
+        inSteps = true;
+        formatted.push(line);
+        previousLineWasStep = false;
+        continue;
+      }
+
+      // Check if exiting steps section
+      if (inSteps && /^\s{2}[a-z-]+:$/.test(line)) {
+        inSteps = false;
+      }
+
+      // Add blank line before job keys (except the very first one after "jobs:")
+      if (isJobKey) {
+        const lastNonEmptyLine = formatted.filter((l) => l.trim() !== '').pop();
+        if (lastNonEmptyLine && lastNonEmptyLine !== 'jobs:') {
+          formatted.push('');
+        }
+        formatted.push(line);
+        previousLineWasStep = false;
+        continue;
+      }
+
+      // Add blank line before each step (except the first one)
+      const isStepStart = inSteps && /^\s{4}-\s/.test(line);
+      if (isStepStart && previousLineWasStep) {
+        formatted.push('');
+      }
+
+      formatted.push(line);
+      previousLineWasStep = isStepStart;
+    }
+
+    return formatted.join('\n');
+  }
+
+  /**
+   * Get the relative path to an agent markdown file from the repository root.
+   * Assumes agents are stored in .github/agents/ directory.
+   */
+  getAgentFilePath(agentName: string): string {
+    // Convert agent name to file-safe format
+    const fileName = agentName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+    return `.github/agents/${fileName}.md`;
+  }
+
+  /**
+   * Get the major version for package pinning (e.g., "1" from "1.2.3")
+   */
+  private getMajorVersion(): string {
+    const major = packageVersion.split('.')[0];
+    return major;
+  }
+
+  /**
+   * Generate a workflow that uses the runtime CLI instead of embedded bash scripts.
+   * This produces clean workflows that delegate logic to `repo-agent run <stage>`.
+   */
+  generate(agent: AgentDefinition, agentFilePath: string): string {
+    const majorVersion = this.getMajorVersion();
+    const cliCommand = `bunx repo-agent@${majorVersion}`;
+    const hasContext = !!agent.context;
+    const hasOutputs = agent.outputs && Object.keys(agent.outputs).length > 0;
+    const outputTypes = hasOutputs ? Object.keys(agent.outputs!) : [];
+
+    // Helper to create GitHub expression strings
+    const ghExpr = (expr: string) => '$' + `{{ ${expr} }}`;
+
+    interface SimplifiedWorkflow {
+      name: string;
+      on: {
+        workflow_call: {
+          inputs: {
+            'context-run-id': {
+              type: string;
+              required: boolean;
+            };
+          };
+        };
+      };
+      permissions?: Record<string, string>;
+      jobs: Record<string, GitHubWorkflowJob>;
+    }
+
+    const workflow: SimplifiedWorkflow = {
+      name: agent.name,
+      on: {
+        workflow_call: {
+          inputs: {
+            'context-run-id': {
+              type: 'string',
+              required: true,
+            },
+          },
+        },
+      },
+      jobs: {},
+    };
+
+    // Add permissions if configured
+    if (agent.permissions) {
+      workflow.permissions = Object.entries(agent.permissions).reduce(
+        (acc, [key, value]) => {
+          const kebabKey = key.replace(/_/g, '-');
+          acc[kebabKey] = value;
+          return acc;
+        },
+        {} as Record<string, string>
+      );
+    }
+
+    // Pre-flight job
+    workflow.jobs['pre-flight'] = {
+      'runs-on': 'ubuntu-latest',
+      outputs: {
+        'should-run': ghExpr('steps.run.outputs.should-run'),
+        'rate-limited': ghExpr('steps.run.outputs.rate-limited'),
+      },
+      steps: [
+        {
+          uses: 'actions/checkout@v4',
+        },
+        {
+          uses: 'oven-sh/setup-bun@v2',
+        },
+        {
+          name: 'Download dispatch context',
+          uses: 'actions/download-artifact@v4',
+          with: {
+            name: `dispatch-context-${ghExpr('inputs.context-run-id')}`,
+            path: '/tmp/dispatch-context/',
+          },
+        },
+        {
+          id: 'run',
+          run: `${cliCommand} run pre-flight --agent ${agentFilePath}`,
+          env: {
+            ANTHROPIC_API_KEY: ghExpr('secrets.ANTHROPIC_API_KEY'),
+            CLAUDE_CODE_OAUTH_TOKEN: ghExpr('secrets.CLAUDE_CODE_OAUTH_TOKEN'),
+            GH_TOKEN: ghExpr('secrets.GITHUB_TOKEN'),
+          },
+        },
+        {
+          uses: 'actions/upload-artifact@v4',
+          if: 'always()',
+          with: {
+            name: `validation-audit-${ghExpr('github.run_id')}`,
+            path: '/tmp/artifacts/validation-audit/',
+          },
+        },
+      ],
+    };
+
+    // Collect-context job (only if context is configured)
+    if (hasContext) {
+      workflow.jobs['collect-context'] = {
+        'runs-on': 'ubuntu-latest',
+        needs: 'pre-flight',
+        if: "needs.pre-flight.outputs.should-run == 'true'",
+        outputs: {
+          'has-context': ghExpr('steps.run.outputs.has-context'),
+        },
+        steps: [
+          {
+            uses: 'actions/checkout@v4',
+          },
+          {
+            uses: 'oven-sh/setup-bun@v2',
+          },
+          {
+            id: 'run',
+            run: `${cliCommand} run context --agent ${agentFilePath}`,
+            env: {
+              GH_TOKEN: ghExpr('secrets.GITHUB_TOKEN'),
+            },
+          },
+          {
+            uses: 'actions/upload-artifact@v4',
+            with: {
+              name: `collected-context-${ghExpr('github.run_id')}`,
+              path: '/tmp/context/',
+            },
+          },
+        ],
+      };
+    }
+
+    // Claude-agent job
+    const claudeAgentNeeds = hasContext ? ['pre-flight', 'collect-context'] : ['pre-flight'];
+    const claudeAgentIf = hasContext
+      ? "needs.pre-flight.outputs.should-run == 'true' && needs.collect-context.outputs.has-context == 'true'"
+      : "needs.pre-flight.outputs.should-run == 'true'";
+
+    const claudeAgentSteps: WorkflowStep[] = [
+      {
+        uses: 'actions/checkout@v4',
+      },
+      {
+        uses: 'oven-sh/setup-bun@v2',
+      },
+      {
+        name: 'Download dispatch context',
+        uses: 'actions/download-artifact@v4',
+        with: {
+          name: `dispatch-context-${ghExpr('inputs.context-run-id')}`,
+          path: '/tmp/dispatch-context/',
+        },
+      },
+    ];
+
+    // Download collected context if context was configured
+    if (hasContext) {
+      claudeAgentSteps.push({
+        uses: 'actions/download-artifact@v4',
+        if: "needs.collect-context.result == 'success'",
+        with: {
+          name: `collected-context-${ghExpr('github.run_id')}`,
+          path: '/tmp/context/',
+        },
+        'continue-on-error': true,
+      });
+    }
+
+    claudeAgentSteps.push(
+      {
+        id: 'run',
+        run: `${cliCommand} run agent --agent ${agentFilePath}`,
+        env: {
+          ANTHROPIC_API_KEY: ghExpr('secrets.ANTHROPIC_API_KEY'),
+          CLAUDE_CODE_OAUTH_TOKEN: ghExpr('secrets.CLAUDE_CODE_OAUTH_TOKEN'),
+          GH_TOKEN: ghExpr('secrets.GITHUB_TOKEN'),
+        },
+      },
+      {
+        uses: 'actions/upload-artifact@v4',
+        with: {
+          name: `claude-outputs-${ghExpr('github.run_id')}`,
+          path: '/tmp/outputs/',
+        },
+      },
+      {
+        uses: 'actions/upload-artifact@v4',
+        with: {
+          name: `audit-metrics-${ghExpr('github.run_id')}`,
+          path: '/tmp/audit/',
+        },
+      }
+    );
+
+    workflow.jobs['claude-agent'] = {
+      'runs-on': 'ubuntu-latest',
+      needs: claudeAgentNeeds,
+      if: claudeAgentIf,
+      steps: claudeAgentSteps,
+    };
+
+    // Execute-outputs job (only if outputs are configured)
+    if (hasOutputs) {
+      workflow.jobs['execute-outputs'] = {
+        'runs-on': 'ubuntu-latest',
+        needs: 'claude-agent',
+        strategy: {
+          matrix: {
+            'output-type': outputTypes,
+          },
+          'fail-fast': false,
+        },
+        steps: [
+          {
+            uses: 'actions/checkout@v4',
+          },
+          {
+            uses: 'oven-sh/setup-bun@v2',
+          },
+          {
+            uses: 'actions/download-artifact@v4',
+            with: {
+              name: `claude-outputs-${ghExpr('github.run_id')}`,
+              path: '/tmp/outputs/',
+            },
+          },
+          {
+            run: `${cliCommand} run outputs --agent ${agentFilePath} --output-type ${ghExpr('matrix.output-type')}`,
+            env: {
+              GH_TOKEN: ghExpr('secrets.GITHUB_TOKEN'),
+            },
+          },
+        ],
+      };
+    }
+
+    // Audit-report job (always present)
+    const auditNeeds = hasContext
+      ? hasOutputs
+        ? ['pre-flight', 'collect-context', 'claude-agent', 'execute-outputs']
+        : ['pre-flight', 'collect-context', 'claude-agent']
+      : hasOutputs
+        ? ['pre-flight', 'claude-agent', 'execute-outputs']
+        : ['pre-flight', 'claude-agent'];
+
+    const auditRunParts: string[] = [
+      `${cliCommand} run audit --agent ${agentFilePath}`,
+      `--pre-flight-result ${ghExpr('needs.pre-flight.result')}`,
+    ];
+
+    if (hasContext) {
+      auditRunParts.push(`--collect-context-result ${ghExpr('needs.collect-context.result')}`);
+    }
+
+    auditRunParts.push(`--claude-agent-result ${ghExpr('needs.claude-agent.result')}`);
+
+    if (hasOutputs) {
+      auditRunParts.push(`--execute-outputs-result ${ghExpr('needs.execute-outputs.result')}`);
+    }
+
+    // Add rate-limited flag conditionally
+    const rateLimitedFlag = ghExpr(
+      "needs.pre-flight.outputs.rate-limited == 'true' && '--rate-limited' || ''"
+    );
+
+    workflow.jobs['audit-report'] = {
+      'runs-on': 'ubuntu-latest',
+      needs: auditNeeds,
+      if: 'always()',
+      steps: [
+        {
+          uses: 'actions/checkout@v4',
+        },
+        {
+          uses: 'oven-sh/setup-bun@v2',
+        },
+        {
+          uses: 'actions/download-artifact@v4',
+          with: {
+            pattern: `*-${ghExpr('github.run_id')}`,
+            path: '/tmp/audit-data/',
+            'merge-multiple': true,
+          },
+          'continue-on-error': true,
+        },
+        {
+          run: `${auditRunParts.join(' \\\n            ')} \\\n            ${rateLimitedFlag}`,
+          env: {
+            GH_TOKEN: ghExpr('secrets.GITHUB_TOKEN'),
+          },
+        },
+      ],
+    };
+
+    const yamlContent = yaml.dump(workflow, {
+      lineWidth: -1,
+      noRefs: true,
+    });
+
+    return this.formatYaml(yamlContent);
+  }
+
+  async writeWorkflow(agent: AgentDefinition, outputDir: string): Promise<string> {
+    const workflowName = agentNameToWorkflowName(agent.name);
+    const fileName = `${workflowName}.yml`;
+    const filePath = `${outputDir}/${fileName}`;
+
+    const agentFilePath = this.getAgentFilePath(agent.name);
+    const content = this.generate(agent, agentFilePath);
+    await writeFile(filePath, content, 'utf-8');
+
+    return filePath;
+  }
+}
+
+export const workflowGenerator = new WorkflowGenerator();
+
+// Re-exports
+export { DispatcherGenerator, dispatcherGenerator } from './dispatcher';
+export { generateSkillsSection, generateSkillForOutput } from './skills';
+export { ContextCollector, contextCollector } from './context-collector';

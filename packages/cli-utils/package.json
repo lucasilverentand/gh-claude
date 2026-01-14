@@ -1,0 +1,27 @@
+{
+  "name": "@repo-agents/cli-utils",
+  "version": "0.4.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./logger": "./src/logger.ts",
+    "./files": "./src/files.ts",
+    "./git": "./src/git.ts",
+    "./prompts": "./src/prompts.ts",
+    "./secrets": "./src/secrets.ts",
+    "./workflow-validator": "./src/workflow-validator.ts"
+  },
+  "scripts": {
+    "test": "bun test"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "chalk": "^5.6.2",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9"
+  }
+}

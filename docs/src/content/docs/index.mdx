@@ -5,13 +5,10 @@ template: splash
 hero:
   tagline: Transform natural language markdown files into GitHub Actions workflows powered by AI
   actions:
-    - text: Learn More
-      link: ./intro
-      icon: right-arrow
-      variant: primary
     - text: Quick Start
-      link: ./start
+      link: /repo-agents/start
       icon: rocket
+      variant: primary
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
@@ -22,18 +19,21 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 
 ## Key Features
 
-<CardGrid>
-  <Card title="Natural Language Workflows" icon="pencil">
-    Write agent behavior in markdown instead of YAML
+<CardGrid stagger>
+  <Card title="Markdown to Workflow" icon="pencil">
+    Write agent instructions in plain markdown—no YAML workflows to maintain
   </Card>
-  <Card title="AI Integration" icon="star">
-    Powered by Claude Code CLI
+  <Card title="Repository-Wide Context" icon="document">
+    Agents can collect issues, PRs, commits, and discussions to analyze trends
   </Card>
-  <Card title="Security by Default" icon="approve-check-circle">
-    Explicit permissions and sandboxed execution
+  <Card title="Guardrails by Design" icon="approve-check-circle">
+    Agents can't freely modify your repo—all changes go through validated output handlers
   </Card>
-  <Card title="Flexible Triggers" icon="rocket">
-    Respond to GitHub events, schedules, or manual dispatch
+  <Card title="Swappable Agent Core" icon="setting">
+    Choose your AI provider—Claude Code, OpenCode, or add your own
+  </Card>
+  <Card title="Built-in Audit & Recovery" icon="warning">
+    Automatic failure diagnosis and issue creation when things go wrong
   </Card>
 </CardGrid>
 

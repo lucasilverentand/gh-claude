@@ -1,6 +1,9 @@
 ---
 title: Pre-Flight Stage
-description: Security checks and validation before agent execution
+slug: stages/pre-flight
+description: Security checks and authorization before agent execution
+sidebar:
+  label: 2. Pre-Flight
 ---
 
 The pre-flight stage runs security and validation checks before allowing agent execution. If any check fails, the workflow stops and the agent doesn't run.
@@ -70,8 +73,3 @@ Uses the GitHub API to check when the workflow last ran successfully.
 | Labels | Required label missing | Add the trigger label to issue/PR |
 | Rate Limit | Too soon since last run | Wait for cooldown or adjust `rate_limit_minutes` |
 
-## See Also
-
-- [Permissions Guide](/repo-agents/guide/permissions/) - User authorization
-- [Security Model](/repo-agents/reference/security-model/) - Security architecture
-- [Triggers Overview](/repo-agents/triggers/) - Rate limiting details

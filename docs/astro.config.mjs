@@ -1,6 +1,7 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import starlightThemeRapide from 'starlight-theme-rapide';
+import starlightLinksValidator from 'starlight-links-validator';
 import react from '@astrojs/react';
 
 export default defineConfig({
@@ -10,7 +11,7 @@ export default defineConfig({
     starlight({
       title: 'Repo Agents',
       description: 'CLI tool for creating AI-powered GitHub Actions workflows from markdown agent definitions',
-      plugins: [starlightThemeRapide()],
+      plugins: [starlightThemeRapide(), starlightLinksValidator()],
       social: [
         {
           label: 'GitHub',
@@ -25,7 +26,43 @@ export default defineConfig({
         },
         {
           label: 'Anatomy of an Agent',
-          items: []
+          items: [
+            { slug: 'anatomy/what-is-an-agent' },
+            { slug: 'anatomy/triggers' },
+            { slug: 'anatomy/context' },
+            { slug: 'anatomy/outputs' },
+            { slug: 'anatomy/audit' },
+          ]
+        },
+        {
+          label: 'Agent Stages',
+          collapsed: true,
+          items: [
+            { slug: 'stages/dispatcher' },
+            { slug: 'stages/pre-flight' },
+            { slug: 'stages/context-building' },
+            { slug: 'stages/agent-execution' },
+            { slug: 'stages/publish-outputs' },
+            { slug: 'stages/audit' },
+          ]
+        },
+        {
+          label: "Trigger Types",
+          autogenerate: {
+            directory: "triggers"
+          }
+        },
+        {
+          label: "Context Types",
+          autogenerate: {
+            directory: "context"
+          }
+        },
+        {
+          label: "Output Types",
+          autogenerate: {
+            directory: "outputs"
+          }
         }
       ]
     }),

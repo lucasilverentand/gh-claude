@@ -3,37 +3,9 @@ title: Discussion Events
 description: Respond to GitHub Discussions activity
 ---
 
-Trigger your agent when discussions are created, answered, or otherwise modified in your repository.
+Discussion triggers allow your agent to respond when users create, edit, answer, or otherwise interact with GitHub Discussions in your repository. This is particularly useful for community support, Q&A automation, and maintaining an active discussion space.
 
-## Basic Configuration
-
-```yaml
-on:
-  discussion:
-    types: [created]
-```
-
-## Available Event Types
-
-- **`created`** - Discussion is created
-- **`edited`** - Discussion title or body is modified
-- **`deleted`** - Discussion is deleted
-- **`transferred`** - Discussion is transferred to another repository
-- **`pinned`** - Discussion is pinned
-- **`unpinned`** - Discussion is unpinned
-- **`labeled`** - Label is added to discussion
-- **`unlabeled`** - Label is removed from discussion
-- **`locked`** - Discussion is locked
-- **`unlocked`** - Discussion is unlocked
-- **`category_changed`** - Discussion category is changed
-- **`answered`** - Discussion is marked as answered
-- **`unanswered`** - Discussion answer is removed
-
-## Common Use Cases
-
-### Welcome Bot
-
-Greet new community members:
+## Basic Example
 
 ```yaml
 ---
@@ -45,15 +17,35 @@ permissions:
   discussions: write
 ---
 
-Welcome new discussion participants:
-1. Thank them for starting the discussion
-2. Provide links to relevant resources
-3. Encourage community engagement
+Welcome new discussion participants and provide helpful resources.
 ```
 
-### Q&A Assistant
+## Configuration Options
 
-Help answer common questions:
+```yaml
+on:
+  discussion:
+    types: [created, answered]  # string[] — default: all types
+```
+
+**types** — Which discussion events trigger the agent: `created`, `edited`, `deleted`, `transferred`, `pinned`, `unpinned`, `labeled`, `unlabeled`, `locked`, `unlocked`, `category_changed`, `answered`, `unanswered`.
+
+## Best Practices
+
+Discussions are community-driven spaces where the tone and approach matter significantly. Agents should be welcoming and helpful without being overwhelming or condescending. A good discussion agent provides value by surfacing relevant resources, routing discussions to appropriate categories, or helping answer common questions, but it should never attempt to fully automate all community interaction.
+
+When working with Q&A discussions, consider triggering on the `answered` event to thank participants or suggest related resources. For new discussions, the `created` event lets you welcome newcomers and point them toward relevant documentation or existing discussions that might help.
+
+Different discussion categories serve different purposes. Announcements are typically for project updates with restricted posting, while Q&A is for questions seeking answers, and Ideas is for feature proposals. Tailor your agent's behavior based on the category context, which is available in the event payload.
+
+Rate limiting is important for discussion agents since discussions can be edited frequently. Consider setting a reasonable `rate_limit_minutes` value to prevent your agent from running too often on rapidly edited content.
+
+Be thoughtful about what your agent writes. Discussion participants often prefer human interaction, so use agents to augment rather than replace community engagement. Agents work well for initial triage, welcoming newcomers, and surfacing relevant links, but substantive answers often benefit from human expertise.
+
+## More Examples
+
+<details>
+<summary>Example: Q&A Helper</summary>
 
 ```yaml
 ---
@@ -65,16 +57,17 @@ permissions:
   discussions: write
 ---
 
-For Q&A discussions:
+For discussions in the Q&A category:
 1. Analyze the question
-2. Check if it matches common questions
-3. Provide helpful links or suggest answers
-4. Tag relevant team members if needed
+2. Search for similar existing discussions
+3. Provide relevant documentation links
+4. Suggest potential answers if the question matches known patterns
 ```
 
-### Category Router
+</details>
 
-Suggest better categories:
+<details>
+<summary>Example: Category Router</summary>
 
 ```yaml
 ---
@@ -86,15 +79,16 @@ permissions:
   discussions: write
 ---
 
-Analyze discussion content and suggest:
-- Moving to a more appropriate category
-- Converting to an issue if it's a bug report
-- Linking to related discussions
+Analyze the discussion content and determine if it is in the most appropriate category.
+If the content appears to be a bug report, suggest converting it to an issue.
+If it matches a different category better, politely suggest moving it.
+Link to any related existing discussions that might be helpful.
 ```
 
-### Auto-Labeling
+</details>
 
-Tag discussions based on content:
+<details>
+<summary>Example: Discussion Labeler</summary>
 
 ```yaml
 ---
@@ -104,195 +98,62 @@ on:
     types: [created, edited]
 permissions:
   discussions: write
+outputs:
+  add-label: true
 ---
 
-Analyze discussion and add labels:
-- 'question' for help requests
-- 'idea' for feature proposals
-- 'showcase' for sharing projects
-- Topic-specific labels (e.g., 'api', 'ui', 'performance')
+Analyze the discussion content and apply appropriate labels:
+- Use 'question' for help requests
+- Use 'idea' for feature proposals
+- Use 'showcase' for community project showcases
+- Apply topic-specific labels like 'api', 'ui', or 'performance' based on content
 ```
 
-## Multiple Event Types
+</details>
 
-Listen to multiple events:
+<details>
+<summary>Example: Answer Acknowledgment</summary>
 
 ```yaml
-on:
-  discussion:
-    types: [created, answered, category_changed]
-```
-
-## Available Data
-
-When your agent runs, it has access to:
-
-- **Discussion number** - via `${{ github.event.discussion.number }}`
-- **Discussion title** - via `${{ github.event.discussion.title }}`
-- **Discussion body** - via `${{ github.event.discussion.body }}`
-- **Discussion author** - via `${{ github.event.discussion.user.login }}`
-- **Discussion category** - via `${{ github.event.discussion.category.name }}`
-- **Discussion state** - via `${{ github.event.discussion.state }}`
-
-Access discussion details using the `gh` CLI:
-
-```bash
-# Get discussion details (requires gh extension)
-gh api repos/${{ github.repository }}/discussions/${{ github.event.discussion.number }}
-```
-
-## Required Permissions
-
-For read-only operations:
-
-```yaml
-permissions:
-  discussions: read
-```
-
-For operations that modify discussions:
-
-```yaml
-permissions:
-  discussions: write
-```
-
-See [Permissions](../../guide/permissions/) for details.
-
-## Rate Limiting
-
-Discussions can be edited frequently. Use rate limiting:
-
-```yaml
-on:
-  discussion:
-    types: [edited]
-rate_limit_minutes: 10  # Max once per 10 minutes
-```
-
-## Best Practices
-
-### Be Welcoming
-
-Discussions are community spaces. Be:
-- Friendly and encouraging
-- Patient with new users
-- Helpful without being condescending
-
-### Respect Categories
-
-Different discussion categories serve different purposes:
-- **Announcements** - Project updates
-- **Q&A** - Questions seeking answers
-- **Ideas** - Feature proposals
-- **Show and tell** - Community showcases
-- **General** - Open-ended discussions
-
-Tailor your agent's behavior to the category.
-
-### Don't Over-Automate
-
-Discussions benefit from human interaction. Use agents to:
-- Welcome new participants
-- Route discussions to the right category
-- Surface common questions
-- **Not** to fully automate responses
-
-### Handle Answered Discussions
-
-When a discussion is marked as answered:
-
-```yaml
+---
+name: Answer Thanks
 on:
   discussion:
     types: [answered]
-```
-
-Consider:
-- Thanking participants
-- Suggesting related resources
-- Encouraging knowledge sharing
-
-## Examples
-
-### FAQ Bot
-
-```yaml
----
-name: FAQ Assistant
-on:
-  discussion:
-    types: [created]
 permissions:
   discussions: write
 ---
 
-Check if the discussion asks a common question:
-1. Search discussion title and body for keywords
-2. If FAQ match found:
-   - Reply with link to documentation
-   - Suggest marking as answered if helpful
-3. If not a match, tag as 'needs-answer'
+When a discussion is marked as answered:
+1. Thank both the question asker and the person who provided the answer
+2. Suggest related resources that might be helpful
+3. Encourage the participants to share their knowledge in other discussions
 ```
 
-### Showcase Highlighter
+</details>
+
+<details>
+<summary>Example: Weekly Discussion Digest (Scheduled)</summary>
 
 ```yaml
 ---
-name: Showcase Bot
-on:
-  discussion:
-    types: [created]
-permissions:
-  discussions: write
----
-
-For discussions in "Show and tell" category:
-1. Welcome the contributor
-2. Encourage screenshots/demos
-3. Suggest relevant tags
-4. Pin exceptional showcases
-```
-
-### Stale Discussion Cleanup
-
-```yaml
----
-name: Stale Discussion Handler
+name: Discussion Digest
 on:
   schedule:
-    - cron: '0 0 * * MON'  # Weekly on Mondays
+    - cron: '0 9 * * MON'
 permissions:
   discussions: write
+context:
+  discussions:
+    limit: 50
+  since: 7d
 ---
 
-Find stale unanswered Q&A discussions:
-1. Check for discussions > 30 days old
-2. No accepted answer
-3. No recent activity
-4. Add comment asking if still relevant
-5. Consider closing very old discussions
+Review discussions from the past week and create a summary:
+1. Highlight popular discussions with the most engagement
+2. List unanswered Q&A discussions that need attention
+3. Celebrate helpful community members who provided answers
+4. Post the digest as a new announcement discussion
 ```
 
-## Discussion Categories
-
-GitHub Discussions support different categories. Common ones include:
-
-- **Announcements** - Project updates (usually restricted posting)
-- **General** - Open-ended conversations
-- **Ideas** - Feature requests and proposals
-- **Polls** - Community voting
-- **Q&A** - Questions and answers
-- **Show and tell** - Community showcases
-
-Access the category in your agent:
-
-```bash
-CATEGORY="${{ github.event.discussion.category.name }}"
-```
-
-## Next Steps
-
-- Learn about [Issue triggers](issues/)
-- Understand [Permissions](../../guide/permissions/)
-- See more [Examples](../../examples/)
+</details>

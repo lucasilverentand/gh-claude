@@ -1,0 +1,22 @@
+{
+  "name": "@repo-agents/runtime",
+  "version": "0.4.1",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "repo-agent": "./src/index.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./stages": "./src/stages/index.ts"
+  },
+  "scripts": {
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@repo-agents/generator": "workspace:*",
+    "@repo-agents/parser": "workspace:*",
+    "@repo-agents/types": "workspace:*",
+    "commander": "^14.0.2"
+  }
+}

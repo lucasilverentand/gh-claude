@@ -1,0 +1,26 @@
+{
+  "name": "@repo-agents/cli",
+  "version": "0.4.1",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "repo-agents": "./src/index.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@repo-agents/cli-utils": "workspace:*",
+    "@repo-agents/generator": "workspace:*",
+    "@repo-agents/parser": "workspace:*",
+    "@repo-agents/types": "workspace:*",
+    "commander": "^14.0.2",
+    "ora": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9"
+  }
+}

@@ -3,363 +3,66 @@ title: Workflow Dispatch
 description: Manually trigger agents with optional inputs
 ---
 
-Allow manual triggering of your agent through the GitHub UI or API, optionally with user-provided inputs.
+The `workflow_dispatch` trigger allows you to run an agent on-demand through the GitHub Actions UI, the GitHub CLI, or the API. This is useful for one-off tasks, testing new agents before enabling automatic triggers, or operations that require user-provided parameters.
 
-## Basic Configuration
-
-```yaml
-on:
-  workflow_dispatch:
-```
-
-This enables manual triggering with no inputs.
-
-## With Inputs
-
-Define inputs to collect data when manually triggered:
-
-```yaml
-on:
-  workflow_dispatch:
-    inputs:
-      target:
-        description: 'Target to process'
-        required: true
-        type: string
-      dryRun:
-        description: 'Run in dry-run mode'
-        required: false
-        type: boolean
-        default: false
-```
-
-## Input Types
-
-### String Input
-
-Text input field:
-
-```yaml
-inputs:
-  message:
-    description: 'Message to process'
-    required: true
-    type: string
-    default: 'Hello world'
-```
-
-### Boolean Input
-
-Checkbox (true/false):
-
-```yaml
-inputs:
-  skipTests:
-    description: 'Skip running tests'
-    required: false
-    type: boolean
-    default: false
-```
-
-### Choice Input
-
-Dropdown with predefined options:
-
-```yaml
-inputs:
-  environment:
-    description: 'Target environment'
-    required: true
-    type: choice
-    options:
-      - development
-      - staging
-      - production
-    default: development
-```
-
-## Input Fields
-
-All input types support these fields:
-
-- **`description`** - Help text shown in GitHub UI (required)
-- **`required`** - Whether input must be provided (default: `false`)
-- **`default`** - Default value if not provided
-- **`type`** - Input type: `string`, `boolean`, or `choice`
-- **`options`** - Array of allowed values (only for `choice` type)
-
-## Accessing Input Values
-
-Input values are available via GitHub context:
-
-```bash
-# Access in your agent using environment variables
-TARGET="${{ inputs.target }}"
-DRY_RUN="${{ inputs.dryRun }}"
-
-echo "Processing target: $TARGET"
-echo "Dry run mode: $DRY_RUN"
-```
-
-## Common Use Cases
-
-### Manual Analysis
-
-On-demand repository analysis:
+## Basic Example
 
 ```yaml
 ---
-name: Manual Repository Analysis
+name: Repository Analysis
 on:
   workflow_dispatch:
-    inputs:
-      scope:
-        description: 'Analysis scope'
-        type: choice
-        options:
-          - recent
-          - all
-          - custom
-        default: recent
-      days:
-        description: 'Days to analyze (if scope=recent)'
-        type: string
-        default: '7'
 permissions:
   issues: read
   pull_requests: read
 ---
 
-Analyze repository based on inputs:
-1. Determine scope from input
-2. Gather issues and PRs
-3. Generate analysis report
-4. Post as discussion
+Analyze the repository and provide a summary of open issues and pull requests.
 ```
 
-### Emergency Response
+This minimal configuration enables manual triggering with no inputs. Navigate to the Actions tab in your repository, select the workflow, and click "Run workflow" to execute it.
 
-Quick investigation or fixes:
+## Configuration Options
+
+When you need to collect information from the user at runtime, define an `inputs` object under `workflow_dispatch`. Each key becomes a field in the GitHub UI.
 
 ```yaml
----
-name: Emergency Issue Investigation
 on:
   workflow_dispatch:
     inputs:
-      issueNumber:
-        description: 'Issue number to investigate'
-        required: true
-        type: string
-      priority:
-        description: 'Priority level'
-        type: choice
-        options:
-          - critical
-          - high
-          - normal
-        default: normal
-permissions:
-  issues: write
----
-
-Investigate the specified issue:
-1. Fetch issue details
-2. Analyze based on priority
-3. Add investigation findings
-4. Suggest next steps
+      environment:
+        description: 'Target environment'  # required
+        type: choice                        # string — default: string
+        options: [dev, staging, prod]       # required when type is choice
+        required: true                      # boolean — default: false
+        default: dev                        # string
 ```
 
-### Batch Operations
+**description** — Human-readable label shown in the GitHub UI.
 
-Process multiple items:
+**type** — Input type: `string`, `boolean`, or `choice`.
 
-```yaml
----
-name: Bulk Label Update
-on:
-  workflow_dispatch:
-    inputs:
-      oldLabel:
-        description: 'Old label name'
-        required: true
-        type: string
-      newLabel:
-        description: 'New label name'
-        required: true
-        type: string
-      dryRun:
-        description: 'Preview changes without applying'
-        type: boolean
-        default: true
-permissions:
-  issues: write
----
+**options** — List of valid values. Required when `type` is `choice`.
 
-Update labels:
-1. Find all issues with old label
-2. If dry run, list changes
-3. If not dry run, update labels
-4. Report results
-```
+**required** — Whether the input must be provided.
 
-### Testing New Agents
+**default** — Default value if not provided.
 
-Test agent behavior before enabling automatic triggers:
+Input values become available in the generated workflow as `${{ inputs.inputName }}`.
 
-```yaml
----
-name: Test Agent
-on:
-  workflow_dispatch:
-    inputs:
-      testMode:
-        description: 'Test mode'
-        type: choice
-        options:
-          - minimal
-          - full
-        default: minimal
-  # issues:
-  #   types: [opened]  # Enable after testing
-permissions:
-  issues: write
----
+## Rate Limiting Behavior
 
-Test agent functionality safely before enabling automatic triggers.
-```
-
-## Triggering Workflows
-
-### Via GitHub UI
-
-1. Go to **Actions** tab
-2. Select your workflow
-3. Click **Run workflow**
-4. Fill in inputs
-5. Click **Run workflow** button
-
-### Via GitHub CLI
-
-```bash
-# Trigger with no inputs
-gh workflow run "Workflow Name"
-
-# Trigger with inputs
-gh workflow run "Workflow Name" \
-  -f target=production \
-  -f dryRun=false
-```
-
-### Via API
-
-```bash
-curl -X POST \
-  -H "Accept: application/vnd.github+json" \
-  -H "Authorization: Bearer $GITHUB_TOKEN" \
-  https://api.github.com/repos/owner/repo/actions/workflows/workflow.yml/dispatches \
-  -d '{
-    "ref": "main",
-    "inputs": {
-      "target": "production",
-      "dryRun": "false"
-    }
-  }'
-```
+Unlike other triggers, manual `workflow_dispatch` runs bypass the rate limit check entirely. This allows you to run an agent immediately even if it recently executed, which is particularly useful during development and testing.
 
 ## Best Practices
 
-### Provide Clear Descriptions
+Write descriptive help text that includes examples of valid values. A description like "Issue number to process (e.g., 123)" is far more helpful than just "number". Users should understand exactly what to enter without guessing.
 
-Help users understand what each input does:
+Use the `choice` type whenever you have a known set of valid options. This prevents typos and makes the interface self-documenting. A dropdown with "low", "medium", and "high" options is better than a free-text field where users might enter "Low", "HIGH", or "med".
 
-```yaml
-# ✅ Good - clear description
-inputs:
-  issueNumber:
-    description: 'Issue number to process (e.g., 123)'
-    required: true
-    type: string
+Set safe defaults for potentially destructive operations. If an agent can modify repository content, consider defaulting a dry-run mode to `true` so users must explicitly opt into making changes.
 
-# ❌ Unclear - vague description
-inputs:
-  number:
-    description: 'Number'
-    type: string
-```
-
-### Use Sensible Defaults
-
-Make common cases easy:
-
-```yaml
-inputs:
-  environment:
-    description: 'Target environment'
-    type: choice
-    options:
-      - development
-      - staging
-      - production
-    default: development  # Safe default
-```
-
-### Use Choice for Limited Options
-
-Prefer dropdowns over free text when values are limited:
-
-```yaml
-# ✅ Good - limited options
-inputs:
-  priority:
-    type: choice
-    options: [low, medium, high]
-
-# ❌ Fragile - free text allows typos
-inputs:
-  priority:
-    type: string
-    description: 'Priority (low/medium/high)'
-```
-
-### Add Dry Run Mode
-
-For operations that modify data:
-
-```yaml
-inputs:
-  dryRun:
-    description: 'Preview changes without applying them'
-    type: boolean
-    default: true  # Safe default
-```
-
-### Validate Inputs
-
-Check input values in your agent:
-
-```yaml
----
-name: Validated Agent
-on:
-  workflow_dispatch:
-    inputs:
-      issueNumber:
-        description: 'Issue number'
-        required: true
-        type: string
----
-
-Before processing:
-1. Validate issue number is numeric
-2. Verify issue exists
-3. Check you have necessary permissions
-4. Then proceed with operation
-```
-
-## Combining with Other Triggers
-
-Use workflow_dispatch alongside automatic triggers:
+Combine `workflow_dispatch` with automatic triggers when you want both behaviors. An agent can respond to new issues automatically while also being available for manual runs against specific issues.
 
 ```yaml
 on:
@@ -368,24 +71,14 @@ on:
   workflow_dispatch:
     inputs:
       issueNumber:
-        description: 'Process specific issue number'
+        description: 'Process a specific issue by number'
         type: string
 ```
 
-This allows:
-- Automatic triggering for new issues
-- Manual triggering for specific issues
+## More Examples
 
-Access in agent:
-
-```bash
-# Use input if provided, otherwise use event issue
-ISSUE_NUM="${{ inputs.issueNumber || github.event.issue.number }}"
-```
-
-## Examples
-
-### Custom Report Generator
+<details>
+<summary>Example: Custom Report Generator</summary>
 
 ```yaml
 ---
@@ -394,12 +87,13 @@ on:
   workflow_dispatch:
     inputs:
       reportType:
-        description: 'Report type'
+        description: 'Type of report to generate'
         type: choice
         options:
           - issues-summary
           - pr-summary
           - contributor-stats
+        default: issues-summary
       startDate:
         description: 'Start date (YYYY-MM-DD)'
         required: true
@@ -408,26 +102,54 @@ on:
         description: 'End date (YYYY-MM-DD)'
         required: true
         type: string
-      format:
-        description: 'Output format'
-        type: choice
-        options:
-          - markdown
-          - json
-        default: markdown
 permissions:
   issues: read
   pull_requests: read
 ---
 
-Generate custom report based on inputs:
-1. Validate date range
-2. Fetch data based on report type
-3. Format according to specified format
-4. Post as discussion or comment
+Generate a custom report based on the selected type and date range.
+Validate the date format before proceeding.
+Format the output as a markdown summary.
 ```
 
-### Migration Tool
+</details>
+
+<details>
+<summary>Example: Emergency Issue Investigation</summary>
+
+```yaml
+---
+name: Emergency Investigation
+on:
+  workflow_dispatch:
+    inputs:
+      issueNumber:
+        description: 'Issue number to investigate'
+        required: true
+        type: string
+      priority:
+        description: 'Investigation priority level'
+        type: choice
+        options:
+          - critical
+          - high
+          - normal
+        default: normal
+permissions:
+  issues: write
+outputs:
+  add-comment: true
+---
+
+Investigate the specified issue thoroughly.
+Review all related code paths and recent changes.
+Add a detailed comment with findings and recommended next steps.
+```
+
+</details>
+
+<details>
+<summary>Example: Bulk Label Migration</summary>
 
 ```yaml
 ---
@@ -436,47 +158,64 @@ on:
   workflow_dispatch:
     inputs:
       fromLabel:
-        description: 'Source label'
+        description: 'Label to migrate from'
         required: true
         type: string
       toLabel:
-        description: 'Destination label'
+        description: 'Label to migrate to'
         required: true
         type: string
-      scope:
-        description: 'What to migrate'
-        type: choice
-        options:
-          - issues-only
-          - prs-only
-          - both
-        default: both
-      confirmMigration:
-        description: 'Confirm you want to proceed'
+      dryRun:
+        description: 'Preview changes without applying'
         type: boolean
-        required: true
+        default: true
 permissions:
   issues: write
-  pull_requests: write
+outputs:
+  add-label: true
+  remove-label: true
 ---
 
-Migrate labels from one to another:
-1. Verify both labels exist
-2. Find all items with source label
-3. Apply destination label
-4. Optionally remove source label
-5. Report results
+Find all issues with the source label.
+If dry run is enabled, list what would change without modifying anything.
+Otherwise, add the new label and remove the old one from each issue.
+Report the total number of issues processed.
 ```
 
-## Limitations
+</details>
 
-- Maximum 10 inputs per workflow
-- Input descriptions limited to 255 characters
-- Choice inputs limited to ~10 options (UI constraint)
-- All inputs are passed as strings in API (even booleans)
+<details>
+<summary>Example: Testing Before Automatic Triggers</summary>
 
-## Next Steps
+```yaml
+---
+name: Issue Responder (Testing)
+on:
+  workflow_dispatch:
+    inputs:
+      issueNumber:
+        description: 'Issue to test with'
+        required: true
+        type: string
+      testMode:
+        description: 'Test intensity'
+        type: choice
+        options:
+          - minimal
+          - full
+        default: minimal
+  # Uncomment after testing:
+  # issues:
+  #   types: [opened]
+permissions:
+  issues: write
+outputs:
+  add-comment: true
+---
 
-- Learn about [Repository Dispatch](repository-dispatch/) for API triggering
-- Combine with [Schedule triggers](schedule/) for hybrid automation
-- Understand [Permissions](../../guide/permissions/)
+Test the issue response workflow with the specified issue.
+In minimal mode, analyze but do not post comments.
+In full mode, post a real response.
+```
+
+</details>
