@@ -157,6 +157,97 @@ const workflowRunsContextSchema = z
   })
   .optional();
 
+const securityAlertsContextSchema = z
+  .object({
+    severity: z.array(z.enum(["critical", "high", "medium", "low"])).optional(),
+    state: z.array(z.enum(["open", "fixed", "dismissed"])).optional(),
+    ecosystem: z.array(z.string()).optional(),
+    limit: z.number().min(1).max(1000).optional(),
+  })
+  .optional();
+
+const dependabotPRsContextSchema = z
+  .object({
+    states: z.array(z.enum(["open", "closed", "merged"])).optional(),
+    limit: z.number().min(1).max(1000).optional(),
+  })
+  .optional();
+
+const codeScanningAlertsContextSchema = z
+  .object({
+    severity: z
+      .array(z.enum(["critical", "high", "medium", "low", "warning", "note", "error"]))
+      .optional(),
+    state: z.array(z.enum(["open", "fixed", "dismissed"])).optional(),
+    tool: z.array(z.string()).optional(),
+    limit: z.number().min(1).max(1000).optional(),
+  })
+  .optional();
+
+const deploymentsContextSchema = z
+  .object({
+    environments: z.array(z.string()).optional(),
+    states: z
+      .array(z.enum(["success", "failure", "error", "pending", "in_progress"]))
+      .optional(),
+    limit: z.number().min(1).max(1000).optional(),
+  })
+  .optional();
+
+const milestonesContextSchema = z
+  .object({
+    states: z.array(z.enum(["open", "closed", "all"])).optional(),
+    sort: z.enum(["due_on", "completeness"]).optional(),
+    limit: z.number().min(1).max(1000).optional(),
+  })
+  .optional();
+
+const contributorsContextSchema = z
+  .object({
+    limit: z.number().min(1).max(1000).optional(),
+    since: z.string().optional(),
+  })
+  .optional();
+
+const commentsContextSchema = z
+  .object({
+    issue_comments: z.boolean().optional(),
+    pr_comments: z.boolean().optional(),
+    pr_review_comments: z.boolean().optional(),
+    discussion_comments: z.boolean().optional(),
+    limit: z.number().min(1).max(1000).optional(),
+  })
+  .optional();
+
+const repositoryTrafficContextSchema = z
+  .object({
+    views: z.boolean().optional(),
+    clones: z.boolean().optional(),
+    referrers: z.boolean().optional(),
+    paths: z.boolean().optional(),
+  })
+  .optional();
+
+const branchesContextSchema = z
+  .object({
+    protected: z.boolean().optional(),
+    stale_days: z.number().min(1).optional(),
+    limit: z.number().min(1).max(1000).optional(),
+  })
+  .optional();
+
+const checkRunsContextSchema = z
+  .object({
+    workflows: z.array(z.string()).optional(),
+    status: z
+      .array(
+        z.enum(["success", "failure", "neutral", "cancelled", "skipped", "timed_out"]),
+      )
+      .optional(),
+    limit: z.number().min(1).max(1000).optional(),
+  })
+  .optional();
+
 const contextConfigSchema = z
   .object({
     issues: issuesContextSchema,
@@ -165,6 +256,16 @@ const contextConfigSchema = z
     commits: commitsContextSchema,
     releases: releasesContextSchema,
     workflow_runs: workflowRunsContextSchema,
+    security_alerts: securityAlertsContextSchema,
+    dependabot_prs: dependabotPRsContextSchema,
+    code_scanning_alerts: codeScanningAlertsContextSchema,
+    deployments: deploymentsContextSchema,
+    milestones: milestonesContextSchema,
+    contributors: contributorsContextSchema,
+    comments: commentsContextSchema,
+    repository_traffic: repositoryTrafficContextSchema,
+    branches: branchesContextSchema,
+    check_runs: checkRunsContextSchema,
     stars: z.boolean().optional(),
     forks: z.boolean().optional(),
     since: z.string().optional(),

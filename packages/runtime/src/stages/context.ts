@@ -13,6 +13,7 @@ import type {
   IssuesContextConfig,
   PullRequestsContextConfig,
   ReleasesContextConfig,
+  SecurityAlertsContextConfig,
   WorkflowRunsContextConfig,
 } from "@repo-agents/types";
 import type { StageContext, StageResult } from "../types";
@@ -142,6 +143,20 @@ export async function runContext(ctx: StageContext): Promise<StageResult> {
     const { markdown, count } = await collectForks(owner, repo);
     collectedSections.push(markdown);
     totalItems += count;
+  }
+
+  // Collect security alerts
+  if (config.security_alerts) {
+    const { markdown, count } = await collectSecurityAlerts(
+      owner,
+      repo,
+      config.security_alerts,
+    );
+    if (count > 0) {
+      collectedSections.push(markdown);
+      totalItems += count;
+    }
+    console.log(`Found ${count} security alert(s)`);
   }
 
   // Check min_items threshold
@@ -850,4 +865,178 @@ async function collectForks(owner: string, repo: string): Promise<CollectionResu
     markdown: `## Forks: ${forks}\n\n`,
     count: 1,
   };
+}
+
+/**
+ * Collect Dependabot security alerts from GitHub
+ */
+async function collectSecurityAlerts(
+  owner: string,
+  repo: string,
+  config: SecurityAlertsContextConfig,
+): Promise<CollectionResult> {
+  const limit = config.limit || 100;
+
+  interface SecurityAlert {
+    number: number;
+    state: string;
+    dependency: {
+      package: {
+        ecosystem: string;
+        name: string;
+      };
+      manifest_path?: string;
+    };
+    security_advisory: {
+      ghsa_id: string;
+      cve_id: string | null;
+      summary: string;
+      description: string;
+      severity: string;
+      cvss: {
+        score: number;
+        vector_string: string | null;
+      };
+      cwes: Array<{
+        cwe_id: string;
+        name: string;
+      }>;
+      published_at: string;
+      updated_at: string;
+      withdrawn_at: string | null;
+      references: Array<{
+        url: string;
+      }>;
+    };
+    security_vulnerability: {
+      package: {
+        ecosystem: string;
+        name: string;
+      };
+      severity: string;
+      vulnerable_version_range: string;
+      first_patched_version: {
+        identifier: string;
+      } | null;
+    };
+    url: string;
+    html_url: string;
+    created_at: string;
+    updated_at: string;
+    dismissed_at: string | null;
+    dismissed_by: { login: string } | null;
+    dismissed_reason: string | null;
+    dismissed_comment: string | null;
+    fixed_at: string | null;
+  }
+
+  try {
+    const response = await ghApi<SecurityAlert[]>(
+      `repos/${owner}/${repo}/dependabot/alerts?per_page=${limit}&sort=created&direction=desc`,
+    );
+
+    let alerts = response;
+
+    // Filter by state if specified
+    if (config.state && config.state.length > 0) {
+      alerts = alerts.filter((alert) => {
+        if (config.state?.includes("open" as never)) {
+          if (alert.state === "open") return true;
+        }
+        if (config.state?.includes("fixed" as never)) {
+          if (alert.state === "fixed" || alert.fixed_at !== null) return true;
+        }
+        if (config.state?.includes("dismissed" as never)) {
+          if (alert.state === "dismissed" || alert.dismissed_at !== null) return true;
+        }
+        return false;
+      });
+    }
+
+    // Filter by severity if specified
+    if (config.severity && config.severity.length > 0) {
+      alerts = alerts.filter((alert) =>
+        config.severity?.includes(alert.security_advisory.severity.toLowerCase() as never),
+      );
+    }
+
+    // Filter by ecosystem if specified
+    if (config.ecosystem && config.ecosystem.length > 0) {
+      alerts = alerts.filter((alert) =>
+        config.ecosystem?.includes(alert.dependency.package.ecosystem),
+      );
+    }
+
+    const markdown = formatSecurityAlertsMarkdown(alerts);
+    return { markdown, count: alerts.length };
+  } catch (error) {
+    console.log("Failed to collect security alerts (may require security_events permission)");
+    console.error(error);
+    return { markdown: "", count: 0 };
+  }
+}
+
+function formatSecurityAlertsMarkdown(alerts: Array<{
+  number: number;
+  state: string;
+  dependency: {
+    package: {
+      ecosystem: string;
+      name: string;
+    };
+  };
+  security_advisory: {
+    ghsa_id: string;
+    cve_id: string | null;
+    summary: string;
+    severity: string;
+    cvss: {
+      score: number;
+    };
+  };
+  security_vulnerability: {
+    vulnerable_version_range: string;
+    first_patched_version: {
+      identifier: string;
+    } | null;
+  };
+  html_url: string;
+  created_at: string;
+  fixed_at: string | null;
+  dismissed_at: string | null;
+}>): string {
+  if (alerts.length === 0) return "";
+
+  const lines = ["## Security Alerts", ""];
+
+  for (const alert of alerts) {
+    const status = alert.fixed_at
+      ? "Fixed"
+      : alert.dismissed_at
+        ? "Dismissed"
+        : "Open";
+
+    lines.push(`### [Alert #${alert.number}] ${alert.security_advisory.summary}`);
+    lines.push(
+      `**Severity:** ${alert.security_advisory.severity.toUpperCase()} (CVSS: ${alert.security_advisory.cvss.score}) | **Status:** ${status}`,
+    );
+    lines.push(
+      `**Package:** ${alert.dependency.package.ecosystem}/${alert.dependency.package.name}`,
+    );
+    lines.push(`**Vulnerable Range:** ${alert.security_vulnerability.vulnerable_version_range}`);
+    if (alert.security_vulnerability.first_patched_version) {
+      lines.push(
+        `**Fixed In:** ${alert.security_vulnerability.first_patched_version.identifier}`,
+      );
+    }
+    if (alert.security_advisory.cve_id) {
+      lines.push(`**CVE:** ${alert.security_advisory.cve_id}`);
+    }
+    lines.push(`**GHSA:** ${alert.security_advisory.ghsa_id}`);
+    lines.push(`**URL:** ${alert.html_url}`);
+    lines.push(`**Created:** ${alert.created_at}`);
+    lines.push("", "---", "");
+  }
+
+  return lines.join("\n");
 }

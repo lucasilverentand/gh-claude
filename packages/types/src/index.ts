@@ -126,19 +126,6 @@ export interface WorkflowStep {
 }
 
 // Context Configuration Types
-export interface ContextConfig {
-  issues?: IssuesContextConfig;
-  pull_requests?: PullRequestsContextConfig;
-  discussions?: DiscussionsContextConfig;
-  commits?: CommitsContextConfig;
-  releases?: ReleasesContextConfig;
-  workflow_runs?: WorkflowRunsContextConfig;
-  stars?: boolean;
-  forks?: boolean;
-  since?: string; // Time filter: "last-run", "1h", "24h", "7d", etc. (default: "last-run")
-  min_items?: number; // Minimum total items to trigger agent (default: 1)
-}
-
 export interface IssuesContextConfig {
   states?: ("open" | "closed" | "all")[];
   labels?: string[];
@@ -188,6 +175,92 @@ export interface WorkflowRunsContextConfig {
   status?: ("success" | "failure" | "cancelled" | "skipped")[];
   branches?: string[];
   limit?: number;
+}
+
+export interface SecurityAlertsContextConfig {
+  severity?: ("critical" | "high" | "medium" | "low")[];
+  state?: ("open" | "fixed" | "dismissed")[];
+  ecosystem?: string[]; // npm, pip, maven, etc.
+  limit?: number;
+}
+
+export interface DependabotPRsContextConfig {
+  states?: ("open" | "closed" | "merged")[];
+  limit?: number;
+}
+
+export interface CodeScanningAlertsContextConfig {
+  severity?: ("critical" | "high" | "medium" | "low" | "warning" | "note" | "error")[];
+  state?: ("open" | "fixed" | "dismissed")[];
+  tool?: string[]; // CodeQL, etc.
+  limit?: number;
+}
+
+export interface DeploymentsContextConfig {
+  environments?: string[];
+  states?: ("success" | "failure" | "error" | "pending" | "in_progress")[];
+  limit?: number;
+}
+
+export interface MilestonesContextConfig {
+  states?: ("open" | "closed" | "all")[];
+  sort?: "due_on" | "completeness";
+  limit?: number;
+}
+
+export interface ContributorsContextConfig {
+  limit?: number;
+  since?: string; // Contributor activity since (uses parent since if not specified)
+}
+
+export interface CommentsContextConfig {
+  issue_comments?: boolean;
+  pr_comments?: boolean;
+  pr_review_comments?: boolean;
+  discussion_comments?: boolean;
+  limit?: number;
+}
+
+export interface RepositoryTrafficContextConfig {
+  views?: boolean;
+  clones?: boolean;
+  referrers?: boolean;
+  paths?: boolean;
+}
+
+export interface BranchesContextConfig {
+  protected?: boolean;
+  stale_days?: number; // Consider branches stale if no commits in N days
+  limit?: number;
+}
+
+export interface CheckRunsContextConfig {
+  workflows?: string[];
+  status?: ("success" | "failure" | "neutral" | "cancelled" | "skipped" | "timed_out")[];
+  limit?: number;
+}
+
+export interface ContextConfig {
+  issues?: IssuesContextConfig;
+  pull_requests?: PullRequestsContextConfig;
+  discussions?: DiscussionsContextConfig;
+  commits?: CommitsContextConfig;
+  releases?: ReleasesContextConfig;
+  workflow_runs?: WorkflowRunsContextConfig;
+  security_alerts?: SecurityAlertsContextConfig;
+  dependabot_prs?: DependabotPRsContextConfig;
+  code_scanning_alerts?: CodeScanningAlertsContextConfig;
+  deployments?: DeploymentsContextConfig;
+  milestones?: MilestonesContextConfig;
+  contributors?: ContributorsContextConfig;
+  comments?: CommentsContextConfig;
+  repository_traffic?: RepositoryTrafficContextConfig;
+  branches?: BranchesContextConfig;
+  check_runs?: CheckRunsContextConfig;
+  stars?: boolean;
+  forks?: boolean;
+  since?: string; // Time filter: "last-run", "1h", "24h", "7d", etc. (default: "last-run")
+  min_items?: number; // Minimum total items to trigger agent (default: 1)
 }
 
 export interface CollectedContext {
