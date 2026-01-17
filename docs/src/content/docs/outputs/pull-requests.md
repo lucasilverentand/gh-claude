@@ -1,9 +1,9 @@
 ---
 title: Pull Requests
-description: Enable agents to create and close pull requests
+description: Enable agents to create, review, merge, and manage pull requests
 ---
 
-The `create-pr` and `close-pr` outputs allow your agent to manage pull requests programmatically. These are powerful capabilities for automating code changes, documentation updates, and maintenance tasks that require review before merging.
+The pull request outputs allow your agent to fully manage the PR lifecycle including creation, review requests, approvals, merging, and closing. These are powerful capabilities for automating code changes, documentation updates, maintenance tasks, and PR workflows.
 
 ## Basic Example
 
@@ -21,25 +21,60 @@ outputs:
   create-pr: true
 ```
 
-## Configuration Options
+## Available Outputs
+
+### create-pr
+
+Create pull requests with code changes, branch creation, and commit signing support.
 
 ```yaml
 outputs:
   create-pr: true            # boolean | { max, sign } — default: false
-  close-pr: true             # boolean — default: false
   # or with options:
   create-pr:
     max: 1                   # number — default: 10
     sign: true               # boolean — default: false
 ```
 
-**create-pr** — Enable creating pull requests. Requires `contents: write` permission.
-
-**close-pr** — Enable closing/merging PRs.
-
 **max** — Maximum PRs to create per run.
 
 **sign** — GPG sign commits in created PRs.
+
+### close-pr
+
+Close pull requests without merging them.
+
+```yaml
+outputs:
+  close-pr: true             # boolean — default: false
+```
+
+### merge-pr
+
+Merge pull requests with configurable merge methods (merge, squash, rebase).
+
+```yaml
+outputs:
+  merge-pr: true             # boolean — default: false
+```
+
+### approve-pr
+
+Approve pull requests on behalf of the agent.
+
+```yaml
+outputs:
+  approve-pr: true           # boolean — default: false
+```
+
+### request-review
+
+Request reviews from users or teams on pull requests.
+
+```yaml
+outputs:
+  request-review: true       # boolean — default: false
+```
 
 ## Permission Requirements
 

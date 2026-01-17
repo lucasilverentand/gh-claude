@@ -22,17 +22,53 @@ Without outputs defined, your agent operates in read-only mode.
 
 ## Available Output Types
 
+### Comments & Labels
 | Output | Description |
 |--------|-------------|
-| [add-comment](/repo-agents/outputs/add-comment/) | Add comments to issues or PRs |
-| [add-label](/repo-agents/outputs/add-label/) | Add labels to issues or PRs |
-| [remove-label](/repo-agents/outputs/remove-label/) | Remove labels from issues or PRs |
-| [create-issue](/repo-agents/outputs/create-issue/) | Create new issues |
-| [create-discussion](/repo-agents/outputs/create-discussion/) | Create new discussions |
-| [create-pr](/repo-agents/outputs/create-pr/) | Create pull requests with code changes |
-| [update-file](/repo-agents/outputs/update-file/) | Modify repository files |
-| [close-issue](/repo-agents/outputs/close-issue/) | Close issues |
-| [close-pr](/repo-agents/outputs/close-pr/) | Close pull requests |
+| [add-comment](/repo-agents/outputs/comments/) | Add comments to issues or PRs |
+| [add-label](/repo-agents/outputs/labels/) | Add labels to issues or PRs |
+| [remove-label](/repo-agents/outputs/labels/) | Remove labels from issues or PRs |
+| [add-reaction](/repo-agents/outputs/reactions/) | Add emoji reactions to issues, PRs, or comments |
+
+### Issues
+| Output | Description |
+|--------|-------------|
+| [create-issue](/repo-agents/outputs/issues/) | Create new issues |
+| [close-issue](/repo-agents/outputs/issues/) | Close issues |
+| [reopen-issue](/repo-agents/outputs/issues/) | Reopen closed issues |
+| [edit-issue](/repo-agents/outputs/issues/) | Edit issue title, body, or state |
+| [assign-issue](/repo-agents/outputs/issues/) | Assign users to issues |
+| [pin-issue](/repo-agents/outputs/issues/) | Pin issues to repository |
+| [set-milestone](/repo-agents/outputs/issues/) | Set milestone on issues or PRs |
+| [lock-conversation](/repo-agents/outputs/issues/) | Lock issue or PR conversations |
+| [convert-to-discussion](/repo-agents/outputs/issues/) | Convert issues to discussions |
+
+### Pull Requests
+| Output | Description |
+|--------|-------------|
+| [create-pr](/repo-agents/outputs/pull-requests/) | Create pull requests with code changes |
+| [close-pr](/repo-agents/outputs/pull-requests/) | Close pull requests |
+| [merge-pr](/repo-agents/outputs/pull-requests/) | Merge pull requests |
+| [approve-pr](/repo-agents/outputs/pull-requests/) | Approve pull requests |
+| [request-review](/repo-agents/outputs/pull-requests/) | Request reviewers for PRs |
+
+### Discussions
+| Output | Description |
+|--------|-------------|
+| [create-discussion](/repo-agents/outputs/discussions/) | Create new discussions |
+
+### Files & Branches
+| Output | Description |
+|--------|-------------|
+| [update-file](/repo-agents/outputs/files/) | Modify repository files |
+| [create-branch](/repo-agents/outputs/branches/) | Create new branches |
+| [delete-branch](/repo-agents/outputs/branches/) | Delete branches |
+
+### Releases & Workflows
+| Output | Description |
+|--------|-------------|
+| [create-release](/repo-agents/outputs/releases/) | Create GitHub releases |
+| [trigger-workflow](/repo-agents/outputs/workflows/) | Trigger workflow_dispatch events |
 
 ## Basic Syntax
 

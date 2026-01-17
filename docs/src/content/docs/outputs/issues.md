@@ -1,9 +1,9 @@
 ---
 title: Issues
-description: Enable agents to create and close GitHub issues
+description: Enable agents to create, edit, and manage GitHub issues
 ---
 
-The `create-issue` and `close-issue` outputs allow your agent to manage GitHub issues. These operations are useful for automating workflows like creating daily summaries, tracking incidents, or cleaning up stale issues.
+The issue outputs allow your agent to fully manage GitHub issues including creation, editing, assignment, state changes, and organization. These operations are useful for automating workflows like creating daily summaries, tracking incidents, triaging new issues, or cleaning up stale issues.
 
 ## Basic Example
 
@@ -19,24 +19,97 @@ permissions:
 outputs:
   create-issue: { max: 1 }
   close-issue: true
+  assign-issue: true
+  add-label: true
 ```
 
-## Configuration Options
+## Available Outputs
+
+### create-issue
+
+Create new issues with title, body, labels, and assignees.
 
 ```yaml
 outputs:
   create-issue: true         # boolean | { max: number } — default: false
-  close-issue: true          # boolean — default: false
   # or with limit:
   create-issue:
     max: 5                   # number — default: unlimited
 ```
 
-**create-issue** — Enable creating new issues. Use object form to limit how many.
-
-**close-issue** — Enable closing issues.
-
 **max** — Maximum issues to create per run.
+
+### close-issue
+
+Close issues with optional state reason ("completed" or "not_planned").
+
+```yaml
+outputs:
+  close-issue: true          # boolean — default: false
+```
+
+### reopen-issue
+
+Reopen previously closed issues.
+
+```yaml
+outputs:
+  reopen-issue: true         # boolean — default: false
+```
+
+### edit-issue
+
+Edit issue properties including title, body, and state.
+
+```yaml
+outputs:
+  edit-issue: true           # boolean — default: false
+```
+
+### assign-issue
+
+Assign or unassign users to issues.
+
+```yaml
+outputs:
+  assign-issue: true         # boolean — default: false
+```
+
+### pin-issue
+
+Pin important issues to the repository.
+
+```yaml
+outputs:
+  pin-issue: true            # boolean — default: false
+```
+
+### set-milestone
+
+Set or change milestones on issues or PRs.
+
+```yaml
+outputs:
+  set-milestone: true        # boolean — default: false
+```
+
+### lock-conversation
+
+Lock issue or PR conversations to prevent further comments.
+
+```yaml
+outputs:
+  lock-conversation: true    # boolean — default: false
+```
+
+### convert-to-discussion
+
+Convert issues to discussions, optionally specifying a category.
+
+```yaml
+outputs:
+  convert-to-discussion: true # boolean — default: false
+```
 
 ## Best Practices
 
