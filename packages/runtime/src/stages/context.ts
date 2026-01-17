@@ -3,6 +3,7 @@ import { dirname } from "node:path";
 import { AgentParser } from "@repo-agents/parser";
 import type {
   CommitsContextConfig,
+  DependabotPRsContextConfig,
   DiscussionsContextConfig,
   GitHubCommit,
   GitHubDiscussion,
@@ -147,16 +148,22 @@ export async function runContext(ctx: StageContext): Promise<StageResult> {
 
   // Collect security alerts
   if (config.security_alerts) {
-    const { markdown, count } = await collectSecurityAlerts(
-      owner,
-      repo,
-      config.security_alerts,
-    );
+    const { markdown, count } = await collectSecurityAlerts(owner, repo, config.security_alerts);
     if (count > 0) {
       collectedSections.push(markdown);
       totalItems += count;
     }
     console.log(`Found ${count} security alert(s)`);
+  }
+
+  // Collect dependabot PRs
+  if (config.dependabot_prs) {
+    const { markdown, count } = await collectDependabotPRs(owner, repo, config.dependabot_prs);
+    if (count > 0) {
+      collectedSections.push(markdown);
+      totalItems += count;
+    }
+    console.log(`Found ${count} Dependabot PR(s)`);
   }
 
   // Check min_items threshold
@@ -976,45 +983,43 @@ async function collectSecurityAlerts(
   }
 }
 
-function formatSecurityAlertsMarkdown(alerts: Array<{
-  number: number;
-  state: string;
-  dependency: {
-    package: {
-      ecosystem: string;
-      name: string;
+function formatSecurityAlertsMarkdown(
+  alerts: Array<{
+    number: number;
+    state: string;
+    dependency: {
+      package: {
+        ecosystem: string;
+        name: string;
+      };
     };
-  };
-  security_advisory: {
-    ghsa_id: string;
-    cve_id: string | null;
-    summary: string;
-    severity: string;
-    cvss: {
-      score: number;
+    security_advisory: {
+      ghsa_id: string;
+      cve_id: string | null;
+      summary: string;
+      severity: string;
+      cvss: {
+        score: number;
+      };
     };
-  };
-  security_vulnerability: {
-    vulnerable_version_range: string;
-    first_patched_version: {
-      identifier: string;
-    } | null;
-  };
-  html_url: string;
-  created_at: string;
-  fixed_at: string | null;
-  dismissed_at: string | null;
-}>): string {
+    security_vulnerability: {
+      vulnerable_version_range: string;
+      first_patched_version: {
+        identifier: string;
+      } | null;
+    };
+    html_url: string;
+    created_at: string;
+    fixed_at: string | null;
+    dismissed_at: string | null;
+  }>,
+): string {
   if (alerts.length === 0) return "";
 
   const lines = ["## Security Alerts", ""];
 
   for (const alert of alerts) {
-    const status = alert.fixed_at
-      ? "Fixed"
-      : alert.dismissed_at
-        ? "Dismissed"
-        : "Open";
+    const status = alert.fixed_at ? "Fixed" : alert.dismissed_at ? "Dismissed" : "Open";
 
     lines.push(`### [Alert #${alert.number}] ${alert.security_advisory.summary}`);
     lines.push(
@@ -1025,9 +1030,7 @@ function formatSecurityAlertsMarkdown(alerts: Array<{
     );
     lines.push(`**Vulnerable Range:** ${alert.security_vulnerability.vulnerable_version_range}`);
     if (alert.security_vulnerability.first_patched_version) {
-      lines.push(
-        `**Fixed In:** ${alert.security_vulnerability.first_patched_version.identifier}`,
-      );
+      lines.push(`**Fixed In:** ${alert.security_vulnerability.first_patched_version.identifier}`);
     }
     if (alert.security_advisory.cve_id) {
       lines.push(`**CVE:** ${alert.security_advisory.cve_id}`);
@@ -1035,6 +1038,117 @@ function formatSecurityAlertsMarkdown(alerts: Array<{
     lines.push(`**GHSA:** ${alert.security_advisory.ghsa_id}`);
     lines.push(`**URL:** ${alert.html_url}`);
     lines.push(`**Created:** ${alert.created_at}`);
+    lines.push("", "---", "");
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * Collect Dependabot pull requests from GitHub
+ */
+async function collectDependabotPRs(
+  owner: string,
+  repo: string,
+  config: DependabotPRsContextConfig,
+): Promise<CollectionResult> {
+  const limit = config.limit || 50;
+  const states = config.states || ["open"];
+
+  interface PullRequestResponse {
+    number: number;
+    title: string;
+    state: string;
+    user: { login: string; type: string };
+    html_url: string;
+    created_at: string;
+    updated_at: string;
+    merged_at: string | null;
+    labels: Array<{ name: string }>;
+    base: { ref: string };
+    head: { ref: string; sha: string };
+    body: string | null;
+  }
+
+  try {
+    // Fetch PRs with all states first, then filter
+    const allStates = ["open", "closed"];
+    const allPrs: PullRequestResponse[] = [];
+
+    for (const state of allStates) {
+      if (
+        states.includes(state as never) ||
+        (state === "closed" && states.includes("merged" as never))
+      ) {
+        const response = await ghApi<PullRequestResponse[]>(
+          `repos/${owner}/${repo}/pulls?state=${state}&per_page=${limit}`,
+        );
+        allPrs.push(...response);
+      }
+    }
+
+    // Filter for Dependabot PRs
+    let dependabotPRs = allPrs.filter(
+      (pr) =>
+        pr.user.login === "dependabot[bot]" ||
+        pr.user.login === "dependabot" ||
+        pr.user.type === "Bot",
+    );
+
+    // Filter by merged state if specified
+    if (states.length === 1 && states[0] === "merged") {
+      dependabotPRs = dependabotPRs.filter((pr) => pr.merged_at !== null);
+    }
+
+    // Limit the results
+    dependabotPRs = dependabotPRs.slice(0, limit);
+
+    const markdown = formatDependabotPRsMarkdown(dependabotPRs);
+    return { markdown, count: dependabotPRs.length };
+  } catch (error) {
+    console.log("Failed to collect Dependabot PRs");
+    console.error(error);
+    return { markdown: "", count: 0 };
+  }
+}
+
+function formatDependabotPRsMarkdown(prs: Array<{
+  number: number;
+  title: string;
+  state: string;
+  html_url: string;
+  created_at: string;
+  updated_at: string;
+  merged_at: string | null;
+  base: { ref: string };
+  head: { ref: string };
+  labels: Array<{ name: string }>;
+  body: string | null;
+}>): string {
+  if (prs.length === 0) return "";
+
+  const lines = ["## Dependabot Pull Requests", ""];
+
+  for (const pr of prs) {
+    const status = pr.merged_at ? "Merged" : pr.state === "open" ? "Open" : "Closed";
+
+    // Try to parse package info from title
+    // Typical format: "Bump package-name from 1.0.0 to 2.0.0"
+    const titleMatch = pr.title.match(/Bump\s+(.+?)\s+from\s+([\d.]+)\s+to\s+([\d.]+)/i);
+    const packageName = titleMatch?.[1] || "Unknown";
+    const fromVersion = titleMatch?.[2] || "?";
+    const toVersion = titleMatch?.[3] || "?";
+
+    lines.push(`### [PR #${pr.number}] ${pr.title}`);
+    lines.push(`**Status:** ${status} | **Package:** ${packageName}`);
+    lines.push(`**Version Update:** ${fromVersion} → ${toVersion}`);
+    lines.push(`**Branch:** ${pr.head.ref} → ${pr.base.ref}`);
+    lines.push(`**Labels:** ${pr.labels.map((l) => l.name).join(", ") || "none"}`);
+    lines.push(`**Created:** ${pr.created_at} | **Updated:** ${pr.updated_at}`);
+    if (pr.merged_at) {
+      lines.push(`**Merged:** ${pr.merged_at}`);
+    }
+    lines.push(`**URL:** ${pr.html_url}`);
     lines.push("", "---", "");
   }
 

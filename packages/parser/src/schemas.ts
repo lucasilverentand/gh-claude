@@ -187,9 +187,7 @@ const codeScanningAlertsContextSchema = z
 const deploymentsContextSchema = z
   .object({
     environments: z.array(z.string()).optional(),
-    states: z
-      .array(z.enum(["success", "failure", "error", "pending", "in_progress"]))
-      .optional(),
+    states: z.array(z.enum(["success", "failure", "error", "pending", "in_progress"])).optional(),
     limit: z.number().min(1).max(1000).optional(),
   })
   .optional();
@@ -240,9 +238,7 @@ const checkRunsContextSchema = z
   .object({
     workflows: z.array(z.string()).optional(),
     status: z
-      .array(
-        z.enum(["success", "failure", "neutral", "cancelled", "skipped", "timed_out"]),
-      )
+      .array(z.enum(["success", "failure", "neutral", "cancelled", "skipped", "timed_out"]))
       .optional(),
     limit: z.number().min(1).max(1000).optional(),
   })
