@@ -76,7 +76,22 @@ export type Output =
   | "create-pr"
   | "update-file"
   | "close-issue"
-  | "close-pr";
+  | "close-pr"
+  | "assign-issue"
+  | "request-review"
+  | "merge-pr"
+  | "approve-pr"
+  | "create-release"
+  | "delete-branch"
+  | "lock-conversation"
+  | "pin-issue"
+  | "convert-to-discussion"
+  | "edit-issue"
+  | "reopen-issue"
+  | "set-milestone"
+  | "trigger-workflow"
+  | "add-reaction"
+  | "create-branch";
 
 export interface OutputConfig {
   max?: number; // Maximum times this output can be used
