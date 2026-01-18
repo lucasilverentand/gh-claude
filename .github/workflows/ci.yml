@@ -77,7 +77,7 @@ jobs:
         run: bun dist/index.js --version
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: build
           path: dist/
@@ -120,7 +120,7 @@ jobs:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Upload coverage artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-report
           path: coverage/
@@ -230,7 +230,7 @@ jobs:
         run: bun run docs:build
 
       - name: Upload docs artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: docs-build
           path: docs/dist/
