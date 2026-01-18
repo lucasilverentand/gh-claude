@@ -51,7 +51,7 @@ jobs:
 
       - name: Verify CLI version
         run: |
-          CLI_VERSION=$(node dist/index.js --version)
+          CLI_VERSION=$(bun dist/index.js --version)
           RELEASE_VERSION="${{ needs.release-please.outputs.version }}"
           echo "CLI version: $CLI_VERSION"
           echo "Release version: $RELEASE_VERSION"

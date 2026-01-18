@@ -6,8 +6,7 @@ Thank you for your interest in contributing to repo-agents! This document provid
 
 ### Prerequisites
 
-- Node.js 20 or higher
-- npm or bun
+- Bun 1.3.0 or higher
 - GitHub CLI (`gh`)
 - Git
 
@@ -32,7 +31,7 @@ Thank you for your interest in contributing to repo-agents! This document provid
 
 5. Run tests:
    ```bash
-   npm test
+   bun test
    ```
 
 ## Development Workflow
@@ -79,7 +78,7 @@ repo-agents/
 
 4. Ensure tests pass:
    ```bash
-   npm test
+   bun test
    ```
 
 5. Ensure linting passes:
@@ -167,7 +166,7 @@ Test instructions`;
 
 ```bash
 # Run all tests
-npm test
+bun test
 
 # Run tests in watch mode
 bun run test:watch

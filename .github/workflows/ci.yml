@@ -47,21 +47,12 @@ jobs:
           fi
 
   build:
-    name: Build (Node ${{ matrix.node-version }})
+    name: Build
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: [20.x, 22.x]
-      fail-fast: false
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ matrix.node-version }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -83,13 +74,12 @@ jobs:
         run: bun run build
 
       - name: Verify CLI executable
-        run: node dist/index.js --version
+        run: bun dist/index.js --version
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v5
-        if: matrix.node-version == '20.x'
         with:
-          name: build-node-${{ matrix.node-version }}
+          name: build
           path: dist/
           retention-days: 7
 
@@ -164,7 +154,7 @@ jobs:
       - name: Download build artifacts
         uses: actions/download-artifact@v7
         with:
-          name: build-node-20.x
+          name: build
           path: dist/
 
       - name: Make test script executable

@@ -42,13 +42,13 @@ Welcome the contributor with a friendly message!
 ## Quick Start
 
 ```bash
-# Run directly with npx (no install required)
-npx @repo-agents/cli init --examples
-npx @repo-agents/cli setup
-npx @repo-agents/cli compile
+# Run directly with bunx (no install required)
+bunx @repo-agents/cli init --examples
+bunx @repo-agents/cli setup
+bunx @repo-agents/cli compile
 
 # Or install globally first
-npm install -g @repo-agents/cli
+bun install -g @repo-agents/cli
 repo-agents init --examples
 repo-agents setup
 repo-agents compile
