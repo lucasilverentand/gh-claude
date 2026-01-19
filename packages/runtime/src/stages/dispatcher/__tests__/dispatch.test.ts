@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { randomUUID } from "node:crypto";
 import { rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -38,8 +39,8 @@ describe("runDispatch", () => {
 
   beforeEach(async () => {
     const tempDir = tmpdir();
-    tempAgentPath = join(tempDir, `agent-${Date.now()}.md`);
-    tempEventPath = join(tempDir, `event-${Date.now()}.json`);
+    tempAgentPath = join(tempDir, `agent-${randomUUID()}.md`);
+    tempEventPath = join(tempDir, `event-${randomUUID()}.json`);
 
     // Reset mocks
     mockIsOrgMember.mockClear();
@@ -97,7 +98,7 @@ on:
     types: [opened]
 permissions:
   issues: write
-allowed_users:
+allowed-users:
   - alice
   - bob
 ---
@@ -119,7 +120,7 @@ name: test-agent
 on:
   issues:
     types: [opened]
-allowed_users:
+allowed-users:
   - alice
   - bob
 ---
@@ -142,7 +143,7 @@ name: test-agent
 on:
   issues:
     types: [opened]
-allowed_teams:
+allowed-teams:
   - core-team
 ---
 Test agent`,

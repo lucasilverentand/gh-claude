@@ -14,6 +14,7 @@ describe("runGlobalPreflight", () => {
       GH_APP_PRIVATE_KEY: process.env.GH_APP_PRIVATE_KEY,
       GH_TOKEN: process.env.GH_TOKEN,
       GITHUB_TOKEN: process.env.GITHUB_TOKEN,
+      FALLBACK_TOKEN: process.env.FALLBACK_TOKEN,
     };
   });
 
@@ -48,6 +49,7 @@ describe("runGlobalPreflight", () => {
     delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
     delete process.env.GH_APP_ID;
     delete process.env.GH_APP_PRIVATE_KEY;
+    delete process.env.FALLBACK_TOKEN;
     process.env.GITHUB_TOKEN = "test-token";
 
     const ctx = createContext();
@@ -131,6 +133,7 @@ describe("runGlobalPreflight", () => {
     process.env.ANTHROPIC_API_KEY = "sk-ant-test-key";
     process.env.GH_APP_ID = "123456";
     delete process.env.GH_APP_PRIVATE_KEY; // Missing private key
+    delete process.env.FALLBACK_TOKEN;
     process.env.GITHUB_TOKEN = "test-token";
 
     const ctx = createContext();
@@ -147,6 +150,7 @@ describe("runGlobalPreflight", () => {
     delete process.env.GH_APP_PRIVATE_KEY;
     delete process.env.GH_TOKEN;
     delete process.env.GITHUB_TOKEN;
+    delete process.env.FALLBACK_TOKEN;
 
     const ctx = createContext();
     const result = await runGlobalPreflight(ctx);

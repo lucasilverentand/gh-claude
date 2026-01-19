@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,7 +11,7 @@ describe("runPrepareContext", () => {
   let tempContextDir: string;
 
   beforeEach(async () => {
-    tempEventPath = join(tmpdir(), `event-${Date.now()}.json`);
+    tempEventPath = join(tmpdir(), `event-${randomUUID()}.json`);
     tempContextDir = "/tmp/dispatch-context";
     await mkdir(tempContextDir, { recursive: true });
   });

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -29,7 +30,7 @@ describe("runRoute", () => {
   });
 
   test("discovers agents from filesystem", async () => {
-    const tempDir = join(tmpdir(), `test-agents-${Date.now()}`);
+    const tempDir = join(tmpdir(), `test-agents-${randomUUID()}`);
     await mkdir(tempDir, { recursive: true });
 
     // Create test agent
@@ -54,7 +55,7 @@ Test agent`,
   });
 
   test("matches issue event to correct agent", async () => {
-    const tempDir = join(tmpdir(), `test-agents-${Date.now()}`);
+    const tempDir = join(tmpdir(), `test-agents-${randomUUID()}`);
     await mkdir(tempDir, { recursive: true });
 
     await writeFile(
@@ -88,7 +89,7 @@ PR agent`,
   });
 
   test("matches pull request event to correct agent", async () => {
-    const tempDir = join(tmpdir(), `test-agents-${Date.now()}`);
+    const tempDir = join(tmpdir(), `test-agents-${randomUUID()}`);
     await mkdir(tempDir, { recursive: true });
 
     await writeFile(
@@ -111,7 +112,7 @@ PR agent`,
   });
 
   test("matches multiple agents for same event", async () => {
-    const tempDir = join(tmpdir(), `test-agents-${Date.now()}`);
+    const tempDir = join(tmpdir(), `test-agents-${randomUUID()}`);
     await mkdir(tempDir, { recursive: true });
 
     await writeFile(
@@ -148,7 +149,7 @@ Agent 2`,
   });
 
   test("returns empty array when no agents match", async () => {
-    const tempDir = join(tmpdir(), `test-agents-${Date.now()}`);
+    const tempDir = join(tmpdir(), `test-agents-${randomUUID()}`);
     await mkdir(tempDir, { recursive: true });
 
     await writeFile(
@@ -170,7 +171,7 @@ PR agent`,
   });
 
   test("handles workflow_dispatch with specific agent", async () => {
-    const tempDir = join(tmpdir(), `test-agents-${Date.now()}`);
+    const tempDir = join(tmpdir(), `test-agents-${randomUUID()}`);
     await mkdir(tempDir, { recursive: true });
 
     await writeFile(
@@ -207,7 +208,7 @@ Agent 2`,
   });
 
   test("handles discussion events", async () => {
-    const tempDir = join(tmpdir(), `test-agents-${Date.now()}`);
+    const tempDir = join(tmpdir(), `test-agents-${randomUUID()}`);
     await mkdir(tempDir, { recursive: true });
 
     await writeFile(
@@ -230,7 +231,7 @@ Discussion agent`,
   });
 
   test("generates correct workflow filenames", async () => {
-    const tempDir = join(tmpdir(), `test-agents-${Date.now()}`);
+    const tempDir = join(tmpdir(), `test-agents-${randomUUID()}`);
     await mkdir(tempDir, { recursive: true });
 
     await writeFile(
@@ -252,7 +253,7 @@ Custom agent`,
   });
 
   test("skips invalid agent files", async () => {
-    const tempDir = join(tmpdir(), `test-agents-${Date.now()}`);
+    const tempDir = join(tmpdir(), `test-agents-${randomUUID()}`);
     await mkdir(tempDir, { recursive: true });
 
     // Invalid agent (missing name)
@@ -287,7 +288,7 @@ Valid`,
   });
 
   test("handles multi-trigger agents", async () => {
-    const tempDir = join(tmpdir(), `test-agents-${Date.now()}`);
+    const tempDir = join(tmpdir(), `test-agents-${randomUUID()}`);
     await mkdir(tempDir, { recursive: true });
 
     await writeFile(

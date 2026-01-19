@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { randomUUID } from "node:crypto";
 import { rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -15,8 +16,8 @@ describe("runDispatch - Basic Validation", () => {
 
   beforeEach(async () => {
     const tempDir = tmpdir();
-    tempAgentPath = join(tempDir, `agent-${Date.now()}.md`);
-    tempEventPath = join(tempDir, `event-${Date.now()}.json`);
+    tempAgentPath = join(tempDir, `agent-${randomUUID()}.md`);
+    tempEventPath = join(tempDir, `event-${randomUUID()}.json`);
   });
 
   afterEach(async () => {
